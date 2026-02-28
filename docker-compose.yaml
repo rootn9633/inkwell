@@ -1,0 +1,16 @@
+services:
+  eink-renderer:
+    build: ./eink-renderer
+    container_name: eink-renderer
+    restart: unless-stopped
+    ports:
+      - "5123:5123"
+    volumes:
+      - ./eink-renderer/displays:/config/displays:ro
+      - ./eink-renderer/hardware:/config/hardware:ro
+      - eink-output:/config/output
+    environment:
+      - PORT=5123
+
+volumes:
+  eink-output:

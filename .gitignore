@@ -1,0 +1,7 @@
+# Runtime artefacts — rendered PNGs are not source
+eink-renderer/output/
+
+# Local notes — not part of the committed project
+.notes/
+
+CLAUDE.md
