@@ -1,0 +1,13 @@
+name: "Seeed reTerminal E1002"
+width: 800
+height: 480
+color_mode: "RGB"
+bg_color: [255, 255, 255]
+fg_color: [0, 0, 0]
+palette:
+  black:   [0, 0, 0]
+  white:   [255, 255, 255]
+  red:     [255, 0, 0]
+  green:   [0, 255, 0]
+  blue:    [0, 0, 255]
+  yellow:  [255, 255, 0]

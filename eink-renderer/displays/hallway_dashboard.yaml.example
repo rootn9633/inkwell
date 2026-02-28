@@ -1,0 +1,15 @@
+hardware: reterminal_e1001
+renderer: dashboard
+
+fonts:
+  title: { file: "LXGWWenKaiScreen.ttf", size: 40 }
+  label: { file: "LXGWWenKaiScreen.ttf", size: 20 }
+  value: { file: "LXGWWenKaiScreen.ttf", size: 36 }
+
+dashboard_title: "Home Status"
+grid: { columns: 3, row_height: 130, padding: 12 }
+
+cards:
+  - { type: sensor, label: "Living Room", entity: "sensor.living_room_temp", unit: "°C" }
+  - { type: sensor, label: "Humidity", entity: "sensor.living_room_humidity", unit: "%" }
+  - { type: status, label: "Front Door", entity: "binary_sensor.front_door", on_text: "OPEN", off_text: "CLOSED" }

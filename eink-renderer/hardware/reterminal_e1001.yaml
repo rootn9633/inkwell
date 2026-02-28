@@ -1,0 +1,6 @@
+name: "Seeed reTerminal E1001"
+width: 800
+height: 480
+color_mode: "L"
+bg_color: 255
+fg_color: 0
