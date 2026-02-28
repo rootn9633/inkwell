@@ -1,0 +1,80 @@
+input_boolean:
+  tea_milk:
+    name: "Tea Milk"
+    initial: true
+    icon: mdi:cup
+  tea_hojicha:
+    name: "Tea Hojicha"
+    icon: mdi:tea
+  tea_honey_yuzu:
+    name: "Tea Honey Yuzu"
+    icon: mdi:fruit-citrus
+  tea_sparkling:
+    name: "Tea Sparkling"
+    icon: mdi:water
+  tea_wintermelon:
+    name: "Tea Wintermelon"
+    icon: mdi:fruit-watermelon
+
+input_select:
+  tea_red_bottle:
+    name: "Tea Red Bottle"
+    options: &bottle_options
+      - none
+      - "Earl Grey"
+      - "Assam"
+      - "抹茶玄米"
+      - "麥茶"
+      - "焙茶"
+      - "玉米鬚茶"
+      - "蜜香烏龍茶"
+    initial: none
+    icon: mdi:bottle-wine
+  tea_green_bottle:
+    name: "Tea Green Bottle"
+    options: *bottle_options
+    initial: none
+    icon: mdi:bottle-wine
+  tea_white_bottle:
+    name: "Tea White Bottle"
+    options: *bottle_options
+    initial: none
+    icon: mdi:bottle-wine
+
+rest_command:
+  render_tea_menu:
+    url: "http://RENDERER_ADDR:5123/render/tea_menu"   # Replace RENDERER_ADDR with IP or hostname
+    method: POST
+    content_type: "application/json"
+    payload: >-
+      {
+        "input_boolean.tea_milk":"{{ states("input_boolean.tea_milk") }}",
+        "input_boolean.tea_hojicha":"{{ states("input_boolean.tea_hojicha") }}",
+        "input_boolean.tea_honey_yuzu":"{{ states("input_boolean.tea_honey_yuzu") }}",
+        "input_boolean.tea_sparkling":"{{ states("input_boolean.tea_sparkling") }}",
+        "input_boolean.tea_wintermelon":"{{ states("input_boolean.tea_wintermelon") }}",
+        "input_select.tea_red_bottle":"{{ states("input_select.tea_red_bottle") }}",
+        "input_select.tea_green_bottle":"{{ states("input_select.tea_green_bottle") }}",
+        "input_select.tea_white_bottle":"{{ states("input_select.tea_white_bottle") }}"
+      }
+
+automation:
+  - alias: "Render Tea Menu on Change"
+    id: render_tea_menu_on_change
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - input_boolean.tea_milk
+          - input_boolean.tea_hojicha
+          - input_boolean.tea_honey_yuzu
+          - input_boolean.tea_sparkling
+          - input_boolean.tea_wintermelon
+      - platform: state
+        entity_id:
+          - input_select.tea_red_bottle
+          - input_select.tea_green_bottle
+          - input_select.tea_white_bottle
+    action:
+      - delay: { seconds: 2 }
+      - service: rest_command.render_tea_menu

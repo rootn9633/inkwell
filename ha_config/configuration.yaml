@@ -1,0 +1,3 @@
+homeassistant:
+  packages:
+    tea_menu: !include packages/tea_menu.yaml
