@@ -1,0 +1,80 @@
+hardware: waveshare_7in5_v2
+renderer: menu
+
+fonts:
+  title:  { file: "LXGWWenKaiScreen.ttf", size: 72 }
+  header: { file: "LXGWWenKaiScreen.ttf", size: 45 }
+  body:   { file: "LXGWWenKaiScreen.ttf", size: 27 }
+
+layout:
+  title_x: 30
+  content_x_start: 120
+  column_width: 240
+  column_count: 3
+  margin_top: 25
+  margin_bottom: 20
+  line_height: 45
+  header_gap: 15
+  header_height: 45
+  header_padding: 5
+  special_gap: 5
+
+title:
+  text: "茶找表"
+  font: title
+  start_y: 60
+  char_spacing: 100
+  separator_x: 110
+
+sections:
+  - type: bottles
+    items:
+      - entity: "input_select.tea_red_bottle"
+        prefix: "紅瓶："
+      - entity: "input_select.tea_green_bottle"
+        prefix: "綠瓶："
+      - entity: "input_select.tea_white_bottle"
+        prefix: "白瓶："
+
+  - type: conditional
+    header: "拿鐵"
+    condition:
+      require_all: ["input_boolean.tea_milk"]
+      require_any_item_active: true
+    items:
+      - text: "焙茶拿鐵"
+        show_when: { entity_on: "input_boolean.tea_hojicha" }
+      - text: "冬瓜牛奶"
+        show_when: { entity_on: "input_boolean.tea_wintermelon" }
+      - text: "伯爵紅茶拿鐵"
+        show_when:
+          any_select_equals:
+            entities:
+              - "input_select.tea_red_bottle"
+              - "input_select.tea_green_bottle"
+              - "input_select.tea_white_bottle"
+            value: "Earl Grey"
+
+  - type: conditional
+    header: "果香"
+    condition: { require_any_item_active: true }
+    items:
+      - show_when: { entity_on: "input_boolean.tea_honey_yuzu" }
+        variants:
+          - when: { entity_on: "input_boolean.tea_sparkling" }
+            text: "蜂蜜柚子氣泡"
+          - when: {}
+            text: "蜂蜜柚子茶"
+      - text: "冬瓜茶"
+        show_when: { entity_on: "input_boolean.tea_wintermelon" }
+
+  - type: static
+    header: "現泡"
+    items:
+      - { text: "伯爵紅茶" }
+      - { text: "蜜香紅茶" }
+      - { text: "阿里山綠茶" }
+      - { text: "蜜香烏龍茶" }
+      - { text: "抹茶玄米茶" }
+      - { text: "玉米鬚茶" }
+      - { text: "焙茶" }

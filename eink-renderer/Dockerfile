@@ -6,7 +6,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
-# renderers/ and fonts/ added in step 3 once those files exist
+COPY renderers/ renderers/
+# Fonts are baked in — rebuild image to change them
+COPY fonts/ fonts/
 
 VOLUME /config/displays
 VOLUME /config/hardware

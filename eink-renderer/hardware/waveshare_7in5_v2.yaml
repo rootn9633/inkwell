@@ -1,0 +1,6 @@
+name: "Waveshare 7.5\" V2"
+width: 800
+height: 480
+color_mode: "1"   # 1-bit black/white (Pillow mode "1")
+bg_color: 255
+fg_color: 0
