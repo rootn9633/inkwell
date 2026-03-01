@@ -127,6 +127,7 @@ def render_display(display_name, states):
 
     image.save(str(out_path), "PNG")
     hash_path.write_text(new_hash)
+    (OUTPUT_DIR / f"{display_name}.states.json").write_text(json.dumps(states))
     log.info("[%s] Rendered → %s (%d bytes)", display_name, out_path, out_path.stat().st_size)
     return True, str(out_path)
 
@@ -197,8 +198,12 @@ def handle_error(e):
 def run_server():
     log.info("E-Ink Renderer on port %d", PORT)
     for name in list_displays():
-        try: render_display(name, {})
-        except Exception as e: log.warning("Startup render %s: %s", name, e)
+        try:
+            state_path = OUTPUT_DIR / f"{name}.states.json"
+            states = json.loads(state_path.read_text()) if state_path.exists() else {}
+            render_display(name, states)
+        except Exception as e:
+            log.warning("Startup render %s: %s", name, e)
     app.run(host="0.0.0.0", port=PORT)
 
 
