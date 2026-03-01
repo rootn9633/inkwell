@@ -7,5 +7,9 @@ eink-renderer/fonts/
 # Local notes — not part of the committed project
 .notes/
 
+# ESPHome secrets and build artifacts
+esphome/secrets.yaml
+esphome/.esphome/
+
 CLAUDE.md
 project-context.md
