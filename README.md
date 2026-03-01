@@ -19,6 +19,9 @@ ESP32 (15 min wake)  →  GET /displays/<name>.bin  →  e-ink display  →  dee
 
 ### 1. Start the renderer
 
+`docker-compose.yaml` uses the pre-built image from GitHub Container Registry by default.
+To build locally instead, run `docker compose up -d --build`.
+
 ```bash
 # Edit docker-compose.yaml and set the port if needed (default 5123)
 docker compose up -d

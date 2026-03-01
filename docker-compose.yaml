@@ -1,6 +1,7 @@
 services:
   eink-renderer:
-    build: ./eink-renderer
+    image: ghcr.io/rootn9633/inkwell:latest
+    build: ./eink-renderer          # override with: docker compose up --build
     container_name: eink-renderer
     restart: unless-stopped
     ports:
