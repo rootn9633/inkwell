@@ -1,6 +1,9 @@
 # Runtime artefacts — rendered PNGs are not source
 eink-renderer/output/
 
+# Fonts are downloaded at build time (see Dockerfile)
+eink-renderer/fonts/
+
 # Local notes — not part of the committed project
 .notes/
 

@@ -7,8 +7,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server.py .
 COPY renderers/ renderers/
+
 # Fonts are baked in — rebuild image to change them
-COPY fonts/ fonts/
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p fonts \
+    && curl -fsSL "https://github.com/lxgw/LxgwWenKai-Screen/releases/download/v1.521/LXGWWenKaiScreen.ttf" \
+       -o fonts/LXGWWenKaiScreen.ttf
 
 VOLUME /config/displays
 VOLUME /config/hardware
