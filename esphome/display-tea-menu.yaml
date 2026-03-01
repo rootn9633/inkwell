@@ -1,0 +1,122 @@
+substitutions:
+  display_name: "tea_menu"
+  renderer_url: "http://<renderer-hostname>:5123"   # Use a proper DNS hostname or IP, not .local
+  sleep_duration: "2min"
+
+esphome:
+  name: "display-${display_name}"
+  on_boot:
+    priority: 200.0
+    then:
+      - script.execute: main_cycle
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+ota:                        # ESPHome ≥ 2024.3 requires list syntax
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+
+http_request:                     # Pulls in esp_http_client.h for use in lambdas
+  useragent: "ESPHome-Display"
+  timeout: 15s
+
+deep_sleep:
+  id: deep_sleep_control
+  run_duration: 120s        # Safety net: must exceed OTA window + boot time
+  sleep_duration: ${sleep_duration}
+
+spi:
+  clk_pin: GPIO13
+  mosi_pin: GPIO14
+
+globals:
+  - id: image_data
+    type: std::array<uint8_t, 48000>   # Pre-allocated at boot before heap fragmentation
+    restore_value: no
+  - id: download_ok
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+display:
+  - platform: waveshare_epaper
+    id: eink_display
+    cs_pin: GPIO15
+    dc_pin: GPIO27
+    busy_pin: GPIO25
+    reset_pin: GPIO26
+    reset_duration: 2ms
+    model: 7.50in-bV2
+    update_interval: never
+    rotation: 180°
+    lambda: |-
+      auto &buf = id(image_data);
+      for (int y = 0; y < 480; y++) {
+        for (int x = 0; x < 800; x++) {
+          bool black = (buf[y * 100 + x / 8] >> (7 - x % 8)) & 1;
+          it.draw_pixel_at(x, y, black ? Color::BLACK : Color::WHITE);
+        }
+      }
+
+script:
+  - id: main_cycle
+    mode: single
+    then:
+      - wait_until:
+          wifi.connected:
+      - logger.log: "Downloading image..."
+      - lambda: |-
+          ESP_LOGI("main", "Free heap: %d bytes", esp_get_free_heap_size());
+          std::string url = std::string("${renderer_url}/displays/${display_name}.bin?t=") +
+                            std::to_string(millis());
+          esp_http_client_config_t config = {};
+          config.url = url.c_str();
+          config.timeout_ms = 15000;
+          config.user_agent = "ESPHome-Display";
+          auto *client = esp_http_client_init(&config);
+          id(download_ok) = false;
+          if (client == nullptr) {
+            ESP_LOGE("main", "HTTP client init failed (heap: %d)", esp_get_free_heap_size());
+          } else if (esp_http_client_open(client, 0) == ESP_OK) {
+            esp_http_client_fetch_headers(client);
+            int total = 0, chunk;
+            while (total < 48000) {
+              int to_read = 48000 - total;
+              if (to_read > 4096) to_read = 4096;
+              chunk = esp_http_client_read(client,
+                  (char *)(id(image_data).data() + total), to_read);
+              if (chunk <= 0) break;
+              total += chunk;
+            }
+            esp_http_client_close(client);
+            if (total == 48000) {
+              id(download_ok) = true;
+            } else {
+              ESP_LOGE("main", "Short read: %d / 48000 bytes", total);
+            }
+          } else {
+            ESP_LOGE("main", "HTTP open failed");
+          }
+          if (client) esp_http_client_cleanup(client);
+      - if:
+          condition:
+            lambda: 'return id(download_ok);'
+          then:
+            - component.update: eink_display
+            - logger.log: "OTA window (60s)..."
+            - delay: 60s
+            - deep_sleep.enter: deep_sleep_control
+          else:
+            - logger.log: "Download failed, sleeping"
+            - delay: 10s
+            - deep_sleep.enter: deep_sleep_control
