@@ -8,6 +8,7 @@ Endpoints:
   POST /render/<display_name>       Trigger render. Body: {entity states}
   GET  /displays/<name>.png         Serve rendered image
   GET  /health                      Health check
+  GET  /displays/<name>.bin         Serve raw 1-bit packed binary (48000 bytes for 800x480)
   GET  /displays                    List displays
 
 CLI:
@@ -31,7 +32,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from flask import Flask, request, send_file
+    from flask import Flask, request, send_file, make_response
 except ImportError:
     print("ERROR: Flask required. pip install flask")
     sys.exit(1)
@@ -155,6 +156,19 @@ def serve_image(name):
     if not img.exists():
         return {"error": f"No image for '{name}'"}, 404
     response = send_file(img, mimetype="image/png")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+@app.get("/displays/<name>.bin")
+def serve_binary(name):
+    img_path = OUTPUT_DIR / f"{name}.png"
+    if not img_path.exists():
+        return {"error": f"No image for '{name}'"}, 404
+    img = Image.open(str(img_path))
+    if img.mode != "1":
+        img = img.convert("1")
+    response = make_response(img.tobytes())
+    response.headers["Content-Type"] = "application/octet-stream"
     response.headers["Cache-Control"] = "no-cache"
     return response
 
