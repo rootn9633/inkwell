@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
@@ -8,12 +8,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
 COPY renderers/ renderers/
 
-# Fonts are baked in — rebuild image to change them
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p fonts \
+# Fonts are downloaded at build time — rebuild image to change them
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && mkdir -p fonts \
     && curl -fsSL "https://github.com/lxgw/LxgwWenKai-Screen/releases/download/v1.521/LXGWWenKaiScreen.ttf" \
-       -o fonts/LXGWWenKaiScreen.ttf
+       -o fonts/LXGWWenKaiScreen.ttf \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 VOLUME /config/displays
 VOLUME /config/hardware
