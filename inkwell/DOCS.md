@@ -2,9 +2,18 @@
 
 Server-side e-ink display renderer with a web UI, running as a Home Assistant add-on.
 
-> **Status:** Phase 1 — add-on skeleton. The UI is a placeholder; rendering, the
-> ESP32 image endpoint, and Home Assistant state sync arrive in later phases. See
-> `.notes/addon-design.md` in the source repo for the full design.
+> **Status:** Phase 2 — rendering works and the ESP32 image endpoint is live. The
+> web UI is still a placeholder and Home Assistant state sync (auto re-render) arrives
+> in the next phase. See `.notes/addon-design.md` in the source repo for the full design.
+
+## Image endpoint (port 5123, no auth)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/displays/<name>.png` | Rendered PNG (preview / ESPHome `online_image`) |
+| `GET` | `/displays/<name>.bin` | Raw packed framebuffer (48 000 B for an 800×480 1-bit display) |
+| `GET` | `/displays` | List configured displays |
+| `POST` | `/render/<name>` | Force a render. Body: `{"entity_id": "state", ...}` |
 
 ## Installation
 
@@ -19,8 +28,22 @@ Server-side e-ink display renderer with a web UI, running as a Home Assistant ad
 |---|---|---|
 | `log_level` | `info` | Log verbosity: `debug`, `info`, `warning`, `error`. |
 
+## Fonts
+
+Display configs reference fonts by filename. Fonts live in the add-on's config share,
+under the `fonts/` subfolder:
+
+- On HAOS/Supervised, browse to the **`addon_configs/<slug>/fonts/`** folder (e.g.
+  `addon_configs/local_inkwell/fonts/`) via the Samba or SSH add-on and drop `.ttf`
+  files in there.
+- A later release adds font upload directly from the web UI, writing to the same folder.
+
+Nothing is bundled, so provide at least one font before rendering a display that uses it
+(e.g. `LXGWWenKaiScreen.ttf` for the sample `tea_menu`). Until a referenced font is present,
+that display logs a warning and its image endpoint returns `404`.
+
 ## Ports
 
 | Port | Purpose |
 |---|---|
-| `5123/tcp` | E-ink image endpoint for ESP32 screens (no auth). Not active until Phase 2. |
+| `5123/tcp` | E-ink image endpoint for ESP32 screens (no auth). |

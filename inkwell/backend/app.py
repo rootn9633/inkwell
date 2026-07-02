@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Inkwell add-on — aiohttp application.
 
-Phase 1: serves a minimal Alpine "hello" page under Home Assistant ingress and a
-health endpoint. Rendering, the image port, and the HA websocket arrive in later
-phases; this module is the entrypoint they'll grow from.
+Runs two HTTP servers in one process:
+  - ingress (INGRESS_PORT): the web UI, reachable only via authenticated HA ingress
+  - image  (IMAGE_PORT):    the raw, no-auth e-ink endpoint the ESP32 fetches from
+
+Phase 2: the image server renders and serves /displays/<name>.png|.bin from /data.
+The HA websocket state sync (auto re-render) arrives in Phase 3; for now displays
+are rendered on startup and can be re-rendered via POST /render/<name>.
 """
 
+import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -13,12 +19,15 @@ from pathlib import Path
 import jinja2
 from aiohttp import web
 
+import render
+
 APP_DIR = Path(__file__).parent
 FRONTEND_DIR = APP_DIR.parent / "frontend"
 TEMPLATES_DIR = FRONTEND_DIR / "templates"
 STATIC_DIR = FRONTEND_DIR / "static"
 
 INGRESS_PORT = int(os.environ.get("INGRESS_PORT", "8099"))
+IMAGE_PORT = int(os.environ.get("IMAGE_PORT", "5123"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "info").upper()
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -30,9 +39,9 @@ _jinja = jinja2.Environment(
 )
 
 
+# ---------------------------------------------------------------- ingress UI
+
 def ingress_base(request: web.Request) -> str:
-    """Base path the UI is served under. HA sets X-Ingress-Path behind ingress;
-    empty when hit directly. Asset/API URLs in templates are prefixed with this."""
     return request.headers.get("X-Ingress-Path", "")
 
 
@@ -45,7 +54,7 @@ async def health(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
-def create_app() -> web.Application:
+def create_ingress_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_get("/health", health)
@@ -53,9 +62,94 @@ def create_app() -> web.Application:
     return app
 
 
+# ------------------------------------------------------------- image server
+
+def _serve_artifact(name: str, suffix: str, content_type: str) -> web.StreamResponse:
+    path = render.OUTPUT_DIR / f"{name}.{suffix}"
+    if not path.exists():
+        return web.json_response({"error": f"No {suffix} for '{name}'"}, status=404)
+    return web.FileResponse(
+        path, headers={"Cache-Control": "no-cache", "Content-Type": content_type}
+    )
+
+
+async def display_png(request: web.Request) -> web.StreamResponse:
+    return _serve_artifact(request.match_info["name"], "png", "image/png")
+
+
+async def display_bin(request: web.Request) -> web.StreamResponse:
+    return _serve_artifact(request.match_info["name"], "bin", "application/octet-stream")
+
+
+async def list_displays(request: web.Request) -> web.Response:
+    displays = []
+    for name in render.list_displays():
+        cfg = render.load_display_config(name)
+        displays.append({
+            "name": name,
+            "hardware": cfg.get("hardware", "?"),
+            "renderer": cfg.get("renderer", "?"),
+            "has_image": (render.OUTPUT_DIR / f"{name}.png").exists(),
+        })
+    return web.json_response({"displays": displays})
+
+
+async def render_endpoint(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    body = await request.text()
+    try:
+        states = json.loads(body) if body.strip() else {}
+    except json.JSONDecodeError as e:
+        return web.json_response({"error": f"Invalid JSON: {e}"}, status=400)
+    try:
+        changed, _ = render.render_display(name, states)
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except Exception as e:
+        log.exception("Render failed")
+        return web.json_response({"error": str(e)}, status=500)
+    return web.json_response(
+        {"display": name, "changed": changed, "image_url": f"/displays/{name}.png"}
+    )
+
+
+def create_image_app() -> web.Application:
+    app = web.Application()
+    app.router.add_get("/health", health)
+    app.router.add_get("/displays", list_displays)
+    app.router.add_get("/displays/{name}.png", display_png)
+    app.router.add_get("/displays/{name}.bin", display_bin)
+    app.router.add_post("/render/{name}", render_endpoint)
+    return app
+
+
+# -------------------------------------------------------------------- boot
+
+async def _run() -> None:
+    render.seed_defaults()
+    render.render_all()
+
+    runners = []
+    for app, port, label in (
+        (create_ingress_app(), INGRESS_PORT, "ingress UI"),
+        (create_image_app(), IMAGE_PORT, "image endpoint"),
+    ):
+        runner = web.AppRunner(app)
+        await runner.setup()
+        await web.TCPSite(runner, "0.0.0.0", port).start()
+        runners.append(runner)
+        log.info("Serving %s on port %d", label, port)
+
+    try:
+        await asyncio.Event().wait()  # run forever
+    finally:
+        for runner in runners:
+            await runner.cleanup()
+
+
 def main() -> None:
-    log.info("Inkwell starting; serving ingress UI on port %d", INGRESS_PORT)
-    web.run_app(create_app(), host="0.0.0.0", port=INGRESS_PORT, print=None)
+    log.info("Inkwell starting")
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":
