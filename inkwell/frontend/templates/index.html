@@ -6,25 +6,108 @@
   <title>Inkwell</title>
   <script defer src="{{ base }}/static/alpine.min.js"></script>
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      margin: 0; display: grid; place-items: center; min-height: 100vh;
+    :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #6b7280; --line: #d1d5db;
+            --accent: #2563eb; --card: #ffffff; --bg: #f5f6f8; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #e5e7eb; --muted: #9ca3af; --line: #374151; --accent: #60a5fa;
+              --card: #1f2224; --bg: #17191b; }
     }
-    main { text-align: center; padding: 2rem; max-width: 36rem; }
-    h1 { margin: 0 0 .25rem; font-size: 2rem; }
-    .msg { font-size: 1.1rem; }
-    .muted { opacity: .6; font-size: .9rem; margin-top: 1.5rem; }
-    code { background: rgba(127,127,127,.2); padding: .1rem .35rem; border-radius: .25rem; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0;
+           background: var(--bg); color: var(--fg); }
+    header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--line);
+             display: flex; align-items: baseline; gap: .6rem; }
+    header h1 { font-size: 1.15rem; margin: 0; }
+    header .sub { color: var(--muted); font-size: .85rem; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; gap: 1rem; padding: 1rem 1.25rem; }
+    @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } }
+    .list { display: flex; flex-direction: column; gap: .5rem; }
+    .item { text-align: left; background: var(--card); border: 1px solid var(--line);
+            border-radius: .5rem; padding: .6rem .75rem; cursor: pointer; color: inherit;
+            font: inherit; }
+    .item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .item .name { font-weight: 600; }
+    .item .meta { color: var(--muted); font-size: .8rem; margin-top: .15rem; }
+    .preview { background: var(--card); border: 1px solid var(--line); border-radius: .5rem;
+               padding: 1rem; }
+    .preview img { width: 100%; height: auto; display: block; border: 1px solid var(--line);
+                   border-radius: .35rem; background: #000; }
+    .kv { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; margin: .75rem 0 0;
+          color: var(--muted); font-size: .85rem; }
+    .kv b { color: var(--fg); font-weight: 600; }
+    .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+    .chip { font-size: .75rem; padding: .1rem .45rem; border: 1px solid var(--line);
+            border-radius: 1rem; color: var(--muted); }
+    .empty, .err { color: var(--muted); padding: 2rem; text-align: center; }
+    .err { color: #dc2626; }
   </style>
 </head>
 <body>
-  <main x-data="{ msg: 'The add-on is running \u{1F389}' }">
-    <h1>Inkwell</h1>
-    <p class="msg" x-text="msg">Loading…</p>
-    <p class="muted">
-      Phase 1 — ingress skeleton. Base path: <code>{{ base or '/' }}</code>
-    </p>
-  </main>
+  <div x-data="inkwell('{{ base }}')" x-init="init()">
+    <header>
+      <h1>Inkwell</h1>
+      <span class="sub" x-text="displays.length + ' display' + (displays.length === 1 ? '' : 's')"></span>
+    </header>
+
+    <template x-if="err">
+      <div class="err" x-text="err"></div>
+    </template>
+
+    <template x-if="!err && displays.length === 0">
+      <div class="empty">No displays configured yet.</div>
+    </template>
+
+    <div class="layout" x-show="!err && displays.length > 0">
+      <div class="list">
+        <template x-for="d in displays" :key="d.name">
+          <button class="item" :class="{ active: d.name === selected }" @click="selected = d.name">
+            <div class="name" x-text="d.name"></div>
+            <div class="meta" x-text="d.hardware + ' · ' + d.renderer"></div>
+          </button>
+        </template>
+      </div>
+
+      <div class="preview" x-show="sel()">
+        <template x-if="sel() && sel().has_image">
+          <img :src="imgUrl(selected)" :alt="selected + ' preview'">
+        </template>
+        <template x-if="sel() && !sel().has_image">
+          <div class="empty">No image rendered yet.</div>
+        </template>
+        <div class="kv" x-show="sel()">
+          <span>Hardware <b x-text="sel().hardware"></b></span>
+          <span>Renderer <b x-text="sel().renderer"></b></span>
+          <span>Updated <b x-text="fmt(sel().modified)"></b></span>
+        </div>
+        <div class="chips" x-show="sel() && sel().entities.length">
+          <template x-for="e in sel().entities" :key="e">
+            <span class="chip" x-text="e"></span>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function inkwell(base) {
+      return {
+        base, displays: [], selected: null, err: null, t: Date.now(),
+        async init() { await this.load(); setInterval(() => this.tick(), 5000); },
+        async load() {
+          try {
+            const r = await fetch(this.base + '/api/displays');
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            this.displays = (await r.json()).displays || [];
+            if (!this.selected && this.displays.length) this.selected = this.displays[0].name;
+            this.err = null;
+          } catch (e) { this.err = 'Failed to load displays: ' + e; }
+        },
+        tick() { this.t = Date.now(); this.load(); },
+        sel() { return this.displays.find(d => d.name === this.selected); },
+        imgUrl(name) { return `${this.base}/api/displays/${name}.png?t=${this.t}`; },
+        fmt(ts) { return ts ? new Date(ts * 1000).toLocaleTimeString() : '—'; },
+      };
+    }
+  </script>
 </body>
 </html>

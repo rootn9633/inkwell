@@ -2,9 +2,9 @@
 
 Server-side e-ink display renderer with a web UI, running as a Home Assistant add-on.
 
-> **Status:** Phase 3 — rendering, the ESP32 image endpoint, and Home Assistant state
-> sync all work: displays auto-render when a watched entity changes. The web UI is still
-> a placeholder. See `.notes/addon-design.md` in the source repo for the full design.
+> **Status:** Phase 4 — rendering, the ESP32 image endpoint, HA state sync, and a
+> read-only web UI all work. The UI lists displays with a live preview; editing and
+> onboarding come next. See `.notes/addon-design.md` in the source repo for the full design.
 
 ## Home Assistant state sync
 

@@ -55,10 +55,33 @@ async def health(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+async def api_displays(request: web.Request) -> web.Response:
+    """Read-only display list for the UI (served under ingress auth)."""
+    items = []
+    for name in render.list_displays():
+        try:
+            cfg = render.load_display_config(name)
+        except Exception as e:
+            log.warning("List %s failed: %s", name, e)
+            continue
+        png = render.OUTPUT_DIR / f"{name}.png"
+        items.append({
+            "name": name,
+            "hardware": cfg.get("hardware", "?"),
+            "renderer": cfg.get("renderer", "?"),
+            "entities": sorted(ha_ws.extract_entities(cfg)),
+            "has_image": png.exists(),
+            "modified": png.stat().st_mtime if png.exists() else None,
+        })
+    return web.json_response({"displays": items})
+
+
 def create_ingress_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_get("/health", health)
+    app.router.add_get("/api/displays", api_displays)
+    app.router.add_get("/api/displays/{name}.png", display_png)  # preview, under ingress
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
     return app
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- Read-only web UI (ingress): lists configured displays with hardware/renderer and the
+  entities each one watches, plus a live preview image that auto-refreshes every 5s so
+  state-driven re-renders show up. Replaces the placeholder page.
+- Ingress-side API: `GET /api/displays` and `GET /api/displays/<name>.png`.
+
 ## 0.3.0
 
 - Home Assistant websocket state sync: the add-on authenticates with its Supervisor

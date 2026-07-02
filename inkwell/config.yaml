@@ -1,5 +1,5 @@
 name: Inkwell
-version: "0.3.0"
+version: "0.4.0"
 slug: inkwell
 description: Server-side e-ink display renderer with a web UI
 url: https://github.com/rootn/inkwell
