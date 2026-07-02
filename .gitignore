@@ -11,5 +11,11 @@ eink-renderer/fonts/
 esphome/secrets.yaml
 esphome/.esphome/
 
+# Vendored JS libs — fetched at Docker build time, not committed
+inkwell/frontend/static/*.min.js
+
+# Local-only dev helper (machine-specific HA host)
+scripts/sync-to-ha.sh
+
 CLAUDE.md
 project-context.md

@@ -1,0 +1,25 @@
+name: Inkwell
+version: "0.1.0"
+slug: inkwell
+description: Server-side e-ink display renderer with a web UI
+url: https://github.com/rootn/inkwell
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:image-frame
+panel_title: Inkwell
+homeassistant_api: true
+# Raw port for the e-ink image endpoint (ESP32 fetch, no auth). Nothing listens
+# on it until Phase 2 — declared now so the manifest is stable across phases.
+ports:
+  "5123/tcp": 5123
+ports_description:
+  "5123/tcp": E-ink image endpoint — ESP32 screens fetch PNG/BIN here (no auth)
+options:
+  log_level: info
+schema:
+  log_level: list(debug|info|warning|error)?
