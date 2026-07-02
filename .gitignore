@@ -17,5 +17,8 @@ inkwell/frontend/static/*.min.js
 # Local-only dev helper (machine-specific HA host)
 scripts/sync-to-ha.sh
 
+# MCP server config — may contain connection secrets
+.mcp.json
+
 CLAUDE.md
 project-context.md

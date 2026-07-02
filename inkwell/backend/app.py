@@ -19,6 +19,7 @@ from pathlib import Path
 import jinja2
 from aiohttp import web
 
+import ha_ws
 import render
 
 APP_DIR = Path(__file__).parent
@@ -123,26 +124,81 @@ def create_image_app() -> web.Application:
     return app
 
 
+# ---------------------------------------------------------------- state sync
+
+ENTITY_TO_DISPLAYS: dict[str, set[str]] = {}
+STATES: dict[str, str] = {}
+_pending: set[str] = set()
+_debounce_task: "asyncio.Task | None" = None
+DEBOUNCE_SECONDS = 0.4
+
+
+def build_index() -> set[str]:
+    """Map each watched entity to the displays using it; return the watched set."""
+    ENTITY_TO_DISPLAYS.clear()
+    for name in render.list_displays():
+        try:
+            cfg = render.load_display_config(name)
+        except Exception as e:
+            log.warning("Index %s failed: %s", name, e)
+            continue
+        for entity in ha_ws.extract_entities(cfg):
+            ENTITY_TO_DISPLAYS.setdefault(entity, set()).add(name)
+    return set(ENTITY_TO_DISPLAYS)
+
+
+async def _render_pending() -> None:
+    await asyncio.sleep(DEBOUNCE_SECONDS)  # coalesce bursts of state changes
+    names = set(_pending)
+    _pending.clear()
+    for name in names:
+        try:
+            render.render_display(name, STATES)
+        except Exception as e:
+            log.warning("Render %s failed: %s", name, e)
+
+
+def on_states(states: dict, changed: set) -> None:
+    """Sync callback: re-render only the displays affected by changed entities."""
+    global _debounce_task
+    STATES.update(states)
+    affected: set[str] = set()
+    for entity in changed:
+        affected |= ENTITY_TO_DISPLAYS.get(entity, set())
+    if not affected:
+        return
+    _pending.update(affected)
+    if _debounce_task and not _debounce_task.done():
+        _debounce_task.cancel()
+    _debounce_task = asyncio.create_task(_render_pending())
+
+
 # -------------------------------------------------------------------- boot
 
 async def _run() -> None:
     render.seed_defaults()
-    render.render_all()
+    watched = build_index()
+    render.render_all()  # baseline (empty states) until HA states arrive
 
     runners = []
-    for app, port, label in (
+    for application, port, label in (
         (create_ingress_app(), INGRESS_PORT, "ingress UI"),
         (create_image_app(), IMAGE_PORT, "image endpoint"),
     ):
-        runner = web.AppRunner(app)
+        runner = web.AppRunner(application)
         await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", port).start()
         runners.append(runner)
         log.info("Serving %s on port %d", label, port)
 
+    sync = ha_ws.HAStateSync(watched, on_states)
+    sync_task = asyncio.create_task(sync.run())
+    log.info("HA state sync watching %d entities", len(watched))
+
     try:
         await asyncio.Event().wait()  # run forever
     finally:
+        sync_task.cancel()
         for runner in runners:
             await runner.cleanup()
 

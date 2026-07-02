@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Home Assistant websocket state sync: the add-on authenticates with its Supervisor
+  token, loads current states, and subscribes to `state_changed`.
+- Displays auto-render when a watched entity changes (entities are extracted from each
+  display config); only affected displays re-render, debounced to coalesce bursts.
+- Replaces the old rest_command + automation approach — no HA YAML needed. `POST
+  /render/<name>` remains for manual/debug use.
+
 ## 0.2.0
 
 - Render engine ported in: displays render to PNG + raw `.bin` (packed framebuffer)
