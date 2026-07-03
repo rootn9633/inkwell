@@ -33,6 +33,7 @@ document.addEventListener('alpine:init', () => {
     entities: [],
     entitiesLoaded: false,
     entityQuery: '',
+    _pickCb: null,
 
     async init() {
       await this.loadList();
@@ -171,6 +172,57 @@ document.addEventListener('alpine:init', () => {
     isDashboard() { return this.config && this.config.renderer === 'dashboard'; },
     ensureTitle() { if (this.config && !this.config.title) this.config.title = { text: '' }; return this.config.title; },
 
+    // ---------------------------------------------------------- menu sections
+    addSection(type) {
+      if (!this.config.sections) this.config.sections = [];
+      const tpl = type === 'bottles' ? { type: 'bottles', items: [] }
+        : type === 'conditional' ? { type: 'conditional', header: '', condition: {}, items: [] }
+        : { type: 'static', header: '', items: [] };
+      this.config.sections.push(tpl);
+      this.edited();
+    },
+    removeSection(i) { this.config.sections.splice(i, 1); this.edited(); },
+    moveSection(i, dir) {
+      const s = this.config.sections, j = i + dir;
+      if (j < 0 || j >= s.length) return;
+      [s[i], s[j]] = [s[j], s[i]];
+      this.edited();
+    },
+    addItem(section) {
+      if (!section.items) section.items = [];
+      if (section.type === 'bottles') section.items.push({ entity: '', prefix: '' });
+      else if (section.type === 'conditional') section.items.push({ text: '', show_when: {} });
+      else section.items.push({ text: '' });
+      this.edited();
+    },
+    removeItem(section, i) { section.items.splice(i, 1); this.edited(); },
+
+    ensureCond(section) { if (!section.condition) section.condition = {}; return section.condition; },
+    requireAll(section) {
+      const c = this.ensureCond(section);
+      if (!c.require_all) c.require_all = [];
+      return c.require_all;
+    },
+    removeRequireAll(section, i) { section.condition.require_all.splice(i, 1); this.edited(); },
+
+    // an item is "advanced" (kept in YAML) if it uses variants or a non-trivial show_when
+    isAdvancedItem(item) {
+      if (item.variants) return true;
+      const sw = item.show_when;
+      if (!sw) return false;
+      const keys = Object.keys(sw);
+      return !(keys.length === 0 || (keys.length === 1 && 'entity_on' in sw));
+    },
+    showWhenMode(item) { return (item.show_when && item.show_when.entity_on) ? 'entity_on' : 'always'; },
+    setShowWhenMode(item, mode) {
+      item.show_when = mode === 'entity_on'
+        ? { entity_on: (item.show_when && item.show_when.entity_on) || '' }
+        : {};
+      this.edited();
+    },
+
+    openPickerFor(cb) { this._pickCb = cb; this.openPicker(); },
+
     async save() {
       if (this.tab === 'yaml') { if (!this.syncYaml()) return; }
       else this.applyForm();
@@ -283,6 +335,13 @@ document.addEventListener('alpine:init', () => {
       return list.slice(0, 200);
     },
     pickEntity(id) {
+      if (this._pickCb) {
+        this._pickCb(id);
+        this._pickCb = null;
+        this.pickerOpen = false;
+        this.edited();
+        return;
+      }
       const ta = this.$refs.yaml;
       if (this.tab === 'yaml' && ta) {
         const s = ta.selectionStart ?? this.yamlText.length;

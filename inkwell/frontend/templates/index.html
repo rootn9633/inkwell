@@ -70,6 +70,22 @@
     .msg { font-size:.85rem; }
     .msg.ok { color:var(--ok); } .msg.err { color:var(--danger); }
     .unsaved { color:#f59e0b; font-size:.85rem; font-weight:500; }
+    .badge { font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; padding:.05rem .4rem;
+             border:1px solid var(--line); border-radius:.35rem; color:var(--muted); }
+    .section { border:1px solid var(--line); border-radius:.5rem; padding:.6rem; margin-bottom:.6rem; background:var(--bg); }
+    .section-head { display:flex; align-items:center; gap:.4rem; margin-bottom:.5rem; }
+    .section .hdr { width:100%; margin-bottom:.5rem; }
+    .cond { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.5rem; }
+    .chk { display:flex; align-items:center; gap:.4rem; color:var(--muted); font-size:.85rem; }
+    .reqall { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+    .lbl { color:var(--muted); font-size:.82rem; }
+    .items { display:flex; flex-direction:column; gap:.35rem; }
+    .irow { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
+    .irow input[type=text] { flex:1; min-width:7rem; }
+    .irow .ent { font-family:ui-monospace, monospace; font-size:.82rem; }
+    .btn.xs { padding:.2rem .45rem; font-size:.8rem; }
+    .chip .x { background:none; border:none; color:var(--muted); cursor:pointer; margin-left:.3rem; padding:0; font-size:.8rem; }
+    .adv { color:var(--muted); font-size:.83rem; display:flex; align-items:center; gap:.4rem; }
     .yamlerr { color:var(--danger); font-size:.82rem; margin-top:.4rem; white-space:pre-wrap; }
 
     /* modal */
@@ -204,7 +220,99 @@
                 </div>
               </div>
 
-              <p class="hint">Sections, cards, layout numbers and advanced conditions are edited in the <b>YAML</b> tab.</p>
+              <!-- menu sections -->
+              <template x-if="isMenu()">
+                <div class="field">
+                  <label>Sections</label>
+                  <template x-for="(section, si) in (config.sections || [])" :key="si">
+                    <div class="section">
+                      <div class="section-head">
+                        <span class="badge" x-text="section.type"></span>
+                        <span class="spacer"></span>
+                        <button class="btn xs" @click="moveSection(si,-1)" :disabled="si===0">↑</button>
+                        <button class="btn xs" @click="moveSection(si,1)" :disabled="si===(config.sections.length-1)">↓</button>
+                        <button class="btn xs danger" @click="removeSection(si)">✕</button>
+                      </div>
+
+                      <template x-if="section.type !== 'bottles'">
+                        <input type="text" class="hdr" placeholder="Header" x-model="section.header" @input="edited()">
+                      </template>
+
+                      <template x-if="section.type === 'conditional'">
+                        <div class="cond">
+                          <label class="chk">
+                            <input type="checkbox"
+                              :checked="section.condition && section.condition.require_any_item_active"
+                              @change="ensureCond(section).require_any_item_active = $event.target.checked; edited()">
+                            require an active item
+                          </label>
+                          <div class="reqall">
+                            <span class="lbl">Require all on:</span>
+                            <template x-for="(e, ei) in ((section.condition && section.condition.require_all) || [])" :key="ei">
+                              <span class="chip"><span x-text="e"></span><button class="x" @click="removeRequireAll(section, ei)">✕</button></span>
+                            </template>
+                            <button class="btn xs" @click="openPickerFor(id => requireAll(section).push(id))">+ entity</button>
+                          </div>
+                        </div>
+                      </template>
+
+                      <div class="items">
+                        <template x-for="(item, ii) in (section.items || [])" :key="ii">
+                          <div class="item-row">
+                            <template x-if="section.type === 'bottles'">
+                              <div class="irow">
+                                <input type="text" class="ent" placeholder="entity_id" x-model="item.entity" @input="edited()">
+                                <button class="btn xs" @click="openPickerFor(id => { item.entity = id })">pick</button>
+                                <input type="text" placeholder="prefix" x-model="item.prefix" @input="edited()">
+                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
+                              </div>
+                            </template>
+                            <template x-if="section.type === 'static'">
+                              <div class="irow">
+                                <input type="text" placeholder="text" x-model="item.text" @input="edited()">
+                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
+                              </div>
+                            </template>
+                            <template x-if="section.type === 'conditional'">
+                              <div class="irow">
+                                <template x-if="isAdvancedItem(item)">
+                                  <span class="adv"><span class="badge">advanced</span> edit in YAML tab</span>
+                                </template>
+                                <template x-if="!isAdvancedItem(item)">
+                                  <input type="text" placeholder="text" x-model="item.text" @input="edited()">
+                                </template>
+                                <template x-if="!isAdvancedItem(item)">
+                                  <select @change="setShowWhenMode(item, $event.target.value)">
+                                    <option value="always" :selected="showWhenMode(item)==='always'">Always</option>
+                                    <option value="entity_on" :selected="showWhenMode(item)==='entity_on'">When entity on</option>
+                                  </select>
+                                </template>
+                                <template x-if="!isAdvancedItem(item) && showWhenMode(item)==='entity_on'">
+                                  <input type="text" class="ent" placeholder="entity_id" x-model="item.show_when.entity_on" @input="edited()">
+                                </template>
+                                <template x-if="!isAdvancedItem(item) && showWhenMode(item)==='entity_on'">
+                                  <button class="btn xs" @click="openPickerFor(id => { item.show_when.entity_on = id })">pick</button>
+                                </template>
+                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
+                              </div>
+                            </template>
+                          </div>
+                        </template>
+                        <button class="btn xs" @click="addItem(section)">+ Item</button>
+                      </div>
+                    </div>
+                  </template>
+                  <div class="row" style="margin-top:.6rem">
+                    <span class="lbl">Add section:</span>
+                    <button class="btn" @click="addSection('bottles')">Bottles</button>
+                    <button class="btn" @click="addSection('static')">Static</button>
+                    <button class="btn" @click="addSection('conditional')">Conditional</button>
+                  </div>
+                </div>
+              </template>
+
+              <p class="hint">Layout numbers, dashboard cards, and advanced item conditions
+                (variants, select-equals) are edited in the <b>YAML</b> tab.</p>
             </div>
 
             <!-- YAML -->

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Structured menu **section editor** in the Form tab: add / remove / reorder sections
+  (bottles, static, conditional) and their items, with the entity picker wired into item
+  fields and a simple "show when entity on" condition — no YAML needed for common edits.
+- Advanced items (`variants`, `any_select_equals`) and dashboard cards are preserved and
+  flagged as "edit in YAML"; the structured editor never drops fields it doesn't manage.
+
 ## 0.5.0
 
 - Editing UI: create / duplicate / rename / delete displays; a settings form (hardware,
