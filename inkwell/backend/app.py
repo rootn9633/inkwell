@@ -76,12 +76,208 @@ async def api_displays(request: web.Request) -> web.Response:
     return web.json_response({"displays": items})
 
 
+async def api_get_display(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    if not render.valid_name(name):
+        return web.json_response({"error": "Invalid name"}, status=400)
+    try:
+        cfg = render.load_display_config(name)
+    except FileNotFoundError:
+        return web.json_response({"error": "Not found"}, status=404)
+    return web.json_response({"name": name, "config": cfg})
+
+
+async def api_create_display(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    name = (body.get("name") or "").strip()
+    if not render.valid_name(name):
+        return web.json_response({"error": "Invalid name (use a-z, 0-9, _, -)"}, status=400)
+    if render.display_path(name).exists():
+        return web.json_response({"error": f"'{name}' already exists"}, status=409)
+    cfg = render.new_config(body.get("template"))
+    render.save_display_config(name, cfg)
+    await _reindex_and_prime([name])
+    return web.json_response({"name": name, "config": cfg})
+
+
+async def api_save_display(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    if not render.valid_name(name):
+        return web.json_response({"error": "Invalid name"}, status=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    cfg = body.get("config")
+    if not isinstance(cfg, dict):
+        return web.json_response({"error": "config must be an object"}, status=400)
+    render.save_display_config(name, cfg)
+    await _reindex_and_prime()
+    result = {"saved": True, "rendered": True}
+    try:
+        render.render_display(name, STATES)
+    except Exception as e:
+        result["rendered"] = False
+        result["error"] = str(e)
+    return web.json_response(result)
+
+
+async def api_delete_display(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    if not render.valid_name(name):
+        return web.json_response({"error": "Invalid name"}, status=400)
+    render.delete_display(name)
+    await _reindex_and_prime()
+    return web.json_response({"deleted": name})
+
+
+async def api_rename_display(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    if not render.valid_name(name):
+        return web.json_response({"error": "Invalid name"}, status=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    new = (body.get("new_name") or "").strip()
+    if not render.valid_name(new):
+        return web.json_response({"error": "Invalid new name"}, status=400)
+    if not render.display_path(name).exists():
+        return web.json_response({"error": "Not found"}, status=404)
+    if render.display_path(new).exists():
+        return web.json_response({"error": f"'{new}' already exists"}, status=409)
+    render.rename_display(name, new)
+    await _reindex_and_prime([new])
+    return web.json_response({"name": new})
+
+
+async def api_preview(request: web.Request) -> web.Response:
+    """Render an unsaved config and cache it (keyed by display name) for the editor's
+    live preview. Served back via GET /api/preview/<name>.png — a normal same-origin URL,
+    which ingress allows (blob:/data: URLs are blocked by the ingress CSP)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    name = (body.get("name") or "").strip()
+    if not render.valid_name(name):
+        name = "_preview"
+    cfg = body.get("config")
+    if not isinstance(cfg, dict):
+        return web.json_response({"error": "config must be an object"}, status=400)
+    try:
+        PREVIEWS[name] = render.render_to_png_bytes(cfg, STATES)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=400)
+    return web.json_response({"ok": True, "name": name})
+
+
+async def api_preview_png(request: web.Request) -> web.StreamResponse:
+    data = PREVIEWS.get(request.match_info["name"])
+    if data is None:
+        return web.json_response({"error": "No preview"}, status=404)
+    return web.Response(body=data, content_type="image/png", headers={"Cache-Control": "no-cache"})
+
+
+async def api_render_now(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    try:
+        changed, _ = render.render_display(name, STATES)
+        return web.json_response({"changed": changed})
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def api_entities(request: web.Request) -> web.Response:
+    try:
+        return web.json_response({"entities": await ha_ws.fetch_entities()})
+    except Exception as e:
+        return web.json_response({"error": str(e), "entities": []}, status=502)
+
+
+async def api_hardware(request: web.Request) -> web.Response:
+    return web.json_response({"hardware": render.list_hardware()})
+
+
+async def api_renderers(request: web.Request) -> web.Response:
+    return web.json_response({"renderers": render.list_renderers()})
+
+
+async def api_fonts(request: web.Request) -> web.Response:
+    return web.json_response({"fonts": render.list_fonts()})
+
+
+MAX_FONT_BYTES = 30 * 1024 * 1024
+
+
+async def api_upload_font(request: web.Request) -> web.Response:
+    reader = await request.multipart()
+    field = await reader.next()
+    while field is not None and field.name != "file":
+        field = await reader.next()
+    if field is None:
+        return web.json_response({"error": "No file field"}, status=400)
+    filename = os.path.basename(field.filename or "")
+    if not filename.lower().endswith((".ttf", ".otf")):
+        return web.json_response({"error": "Only .ttf or .otf fonts"}, status=400)
+    render.USER_FONTS_DIR.mkdir(parents=True, exist_ok=True)
+    dest = render.USER_FONTS_DIR / filename
+    tmp = dest.with_name(dest.name + ".tmp")
+    size = 0
+    with open(tmp, "wb") as f:
+        while True:
+            chunk = await field.read_chunk()
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_FONT_BYTES:
+                f.close()
+                tmp.unlink()
+                return web.json_response({"error": "Font too large (30 MB max)"}, status=413)
+            f.write(chunk)
+    try:
+        from PIL import ImageFont
+        ImageFont.truetype(str(tmp), 16)
+    except Exception as e:
+        tmp.unlink()
+        return web.json_response({"error": f"Not a valid font: {e}"}, status=400)
+    os.replace(tmp, dest)
+    log.info("Font uploaded: %s (%d bytes)", filename, size)
+    return web.json_response({"font": filename, "fonts": render.list_fonts()})
+
+
+@web.middleware
+async def _no_cache(request: web.Request, handler):
+    """Revalidate on every load so the ingress iframe never serves a stale JS bundle."""
+    resp = await handler(request)
+    resp.headers.setdefault("Cache-Control", "no-cache")
+    return resp
+
+
 def create_ingress_app() -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[_no_cache], client_max_size=MAX_FONT_BYTES + 1024 * 1024)
     app.router.add_get("/", index)
     app.router.add_get("/health", health)
     app.router.add_get("/api/displays", api_displays)
     app.router.add_get("/api/displays/{name}.png", display_png)  # preview, under ingress
+    app.router.add_get("/api/displays/{name}", api_get_display)
+    app.router.add_post("/api/displays", api_create_display)
+    app.router.add_put("/api/displays/{name}", api_save_display)
+    app.router.add_delete("/api/displays/{name}", api_delete_display)
+    app.router.add_post("/api/displays/{name}/rename", api_rename_display)
+    app.router.add_post("/api/displays/{name}/render", api_render_now)
+    app.router.add_post("/api/preview", api_preview)
+    app.router.add_get("/api/preview/{name}.png", api_preview_png)
+    app.router.add_get("/api/entities", api_entities)
+    app.router.add_get("/api/hardware", api_hardware)
+    app.router.add_get("/api/renderers", api_renderers)
+    app.router.add_get("/api/fonts", api_fonts)
+    app.router.add_post("/api/fonts", api_upload_font)
     app.router.add_static("/static/", path=str(STATIC_DIR), name="static")
     return app
 
@@ -151,9 +347,30 @@ def create_image_app() -> web.Application:
 
 ENTITY_TO_DISPLAYS: dict[str, set[str]] = {}
 STATES: dict[str, str] = {}
+PREVIEWS: dict[str, bytes] = {}  # transient editor previews of unsaved configs
+SYNC: "ha_ws.HAStateSync | None" = None
 _pending: set[str] = set()
 _debounce_task: "asyncio.Task | None" = None
 DEBOUNCE_SECONDS = 0.4
+
+
+async def _reindex_and_prime(render_names: "list[str] | None" = None) -> None:
+    """After a config change: rebuild the entity index, refresh watched states from
+    HA (so newly-referenced entities have a current value), and re-render as needed."""
+    watched = build_index()
+    if SYNC is not None:
+        SYNC.watched = watched
+        try:
+            for e in await ha_ws.fetch_entities():
+                if e["entity_id"] in watched:
+                    STATES[e["entity_id"]] = e["state"]
+        except Exception as ex:
+            log.warning("State prime failed: %s", ex)
+    for name in render_names or []:
+        try:
+            render.render_display(name, STATES)
+        except Exception as e:
+            log.warning("Render %s failed: %s", name, e)
 
 
 def build_index() -> set[str]:
@@ -199,6 +416,7 @@ def on_states(states: dict, changed: set) -> None:
 # -------------------------------------------------------------------- boot
 
 async def _run() -> None:
+    global SYNC
     render.seed_defaults()
     watched = build_index()
     render.render_all()  # baseline (empty states) until HA states arrive
@@ -215,6 +433,7 @@ async def _run() -> None:
         log.info("Serving %s on port %d", label, port)
 
     sync = ha_ws.HAStateSync(watched, on_states)
+    SYNC = sync
     sync_task = asyncio.create_task(sync.run())
     log.info("HA state sync watching %d entities", len(watched))
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+- Editing UI: create / duplicate / rename / delete displays; a settings form (hardware,
+  renderer, fonts) and a validated YAML editor for everything else, with a "Render now"
+  button, and a searchable HA entity picker that inserts entity ids.
+- Live preview: the editor re-renders the current *unsaved* config as you type (debounced,
+  via `POST /api/preview`), so edits show immediately; Save then persists + re-renders.
+- Unsaved-changes indicator: the editor flags unsaved edits, disables Save until there are
+  changes, and warns before navigating away or closing the tab.
+- Serve UI assets with `Cache-Control: no-cache` so the ingress iframe revalidates and
+  always picks up updates instead of a stale cached bundle.
+- Font upload: drop a `.ttf`/`.otf` into `/config/fonts` from the browser.
+- New ingress API: display CRUD, `/api/entities`, `/api/hardware`, `/api/renderers`,
+  `/api/fonts` (list + upload). Saving re-indexes watched entities and re-renders.
+- Vendors js-yaml at build time for the YAML editor.
+
 ## 0.4.0
 
 - Read-only web UI (ingress): lists configured displays with hardware/renderer and the

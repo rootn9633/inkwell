@@ -12,10 +12,13 @@ COPY frontend/ /app/frontend/
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-# Vendored asset fetched at build time (not committed): Alpine.js for the UI.
+# Vendored assets fetched at build time (not committed): Alpine.js + js-yaml for the UI.
 ARG ALPINE_JS_VERSION=3.14.1
+ARG JS_YAML_VERSION=4.1.0
 RUN mkdir -p /app/frontend/static \
  && curl -fsSL "https://cdn.jsdelivr.net/npm/alpinejs@${ALPINE_JS_VERSION}/dist/cdn.min.js" \
-      -o /app/frontend/static/alpine.min.js
+      -o /app/frontend/static/alpine.min.js \
+ && curl -fsSL "https://cdn.jsdelivr.net/npm/js-yaml@${JS_YAML_VERSION}/dist/js-yaml.min.js" \
+      -o /app/frontend/static/js-yaml.min.js
 
 CMD [ "/run.sh" ]

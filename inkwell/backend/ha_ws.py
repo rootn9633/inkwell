@@ -17,6 +17,28 @@ log = logging.getLogger("inkwell.ha_ws")
 
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 WS_URL = os.environ.get("HA_WS_URL", "ws://supervisor/core/websocket")
+API_URL = os.environ.get("HA_API_URL", "http://supervisor/core/api")
+
+
+async def fetch_entities() -> list[dict]:
+    """All HA entities (id, friendly name, state) for the UI entity picker."""
+    if not SUPERVISOR_TOKEN:
+        return []
+    headers = {"Authorization": "Bearer " + SUPERVISOR_TOKEN}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(API_URL + "/states", headers=headers) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+    out = [
+        {
+            "entity_id": st["entity_id"],
+            "name": (st.get("attributes") or {}).get("friendly_name") or st["entity_id"],
+            "state": st.get("state"),
+        }
+        for st in data
+    ]
+    out.sort(key=lambda e: e["entity_id"])
+    return out
 
 # HA entity_id: lowercase domain.object_id. Display configs only contain entity ids
 # in this exact shape (font filenames, hardware names, menu text don't match), so a
