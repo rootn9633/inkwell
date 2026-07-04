@@ -1,12 +1,25 @@
-"""Menu Renderer — Structured menus with vertical title, sections, columns."""
+"""Menu Renderer — structured menus with a vertical title, headers, and columns.
+
+Two config schemas are supported:
+
+- **groups** (current): a list of groups, each with an optional header and a list of items.
+  Each item is a Line / Choice / Advanced render plus a `when` condition list (ANDed).
+  Condition types: entity_on, entity_off, select_equals ({entity|any_of|entities, value}).
+- **sections** (legacy): the original bottles/conditional/static schema. Rendered by the old
+  code path unchanged so pre-existing configs keep working.
+"""
 from PIL import Image, ImageDraw, ImageFont
 
 
 def render(image, draw, config, hardware, states, fonts):
     r = _MenuLayout(image, draw, config, hardware, states, fonts)
     r.draw_title()
-    for section in config.get("sections", []):
-        r.render_section(section)
+    if config.get("groups") is not None:
+        for group in config["groups"]:
+            r.render_group(group)
+    else:  # legacy
+        for section in config.get("sections", []):
+            r.render_section(section)
 
 
 class _MenuLayout:
@@ -34,6 +47,7 @@ class _MenuLayout:
         self.col_i = 0
         self.cy = self.m_top
 
+    # --- shared helpers ---
     def _s(self, eid): return self.states.get(eid, "unavailable")
     def _on(self, eid): return self._s(eid) == "on"
     def _x(self): return self.cols[self.col_i]
@@ -71,10 +85,73 @@ class _MenuLayout:
 
     def gap(self, px=None): self.cy += px if px else self.spc_gap
 
+    # ------------------------------------------------------------ new: groups
+    def render_group(self, g):
+        header = g.get("header")
+        lines = [t for item in g.get("items", []) if (t := self._item_text(item))]
+        if not lines:
+            # empty group: drop it (incl. header) unless it explicitly opts out
+            if header and g.get("hide_if_empty", True) is False:
+                self.print_header(header)
+            return
+        if header:
+            self.print_header(header)
+            for t in lines:
+                self.print_item(t)
+        else:  # headerless group (e.g. bottle list) — spaced like the old bottles
+            for t in lines:
+                self.print_item(t)
+                self.gap()
+
+    def _item_text(self, item):
+        """Rendered text for an item, or None/'' if it shouldn't be shown."""
+        control = item.get("control", "line")
+        if control == "advanced":
+            return self._advanced_text(item)
+        if not self._when_ok(item.get("when")):
+            return None
+        if control == "choice":
+            eid = item.get("entity")
+            val = self._s(eid) if eid else None
+            if val in (None, "", "none", "unavailable", "unknown"):
+                return None
+            return f"{item.get('text', '')}{item.get('separator', '：')}{val}"
+        return item.get("text", "")
+
+    def _when_ok(self, conditions):
+        return all(self._cond(c) for c in (conditions or []))
+
+    def _cond(self, c):
+        if "entity_on" in c:
+            return self._s(c["entity_on"]) == "on"
+        if "entity_off" in c:
+            return self._s(c["entity_off"]) == "off"
+        if "select_equals" in c:
+            se = c["select_equals"]
+            value = se.get("value")
+            ents = se.get("any_of") or se.get("entities")
+            if ents:
+                return any(self._s(e) == value for e in ents)
+            if "entity" in se:
+                return self._s(se["entity"]) == value
+        return True  # unknown condition → don't hide
+
+    def _advanced_text(self, item):
+        if not self._eval(item.get("show_when", {})):
+            return None
+        variants = item.get("variants")
+        if variants:
+            for v in variants:
+                if self._eval(v.get("when", {})):
+                    return v.get("text")
+            return None
+        return item.get("text", "")
+
+    # ------------------------------------------------------- legacy: sections
     def render_section(self, s):
         t = s.get("type", "static")
         if t == "bottles": self._bottles(s)
-        elif t == "conditional": self._cond(s)
+        elif t == "conditional": self._cond_section(s)
         elif t == "static": self._static(s)
 
     def _bottles(self, s):
@@ -83,7 +160,7 @@ class _MenuLayout:
             if v not in ("none", "unavailable"):
                 self.print_item(f"{i['prefix']}{v}"); self.gap()
 
-    def _cond(self, s):
+    def _cond_section(self, s):
         hdr, cond, items = s.get("header",""), s.get("condition",{}), s.get("items",[])
         active = [i for i in items if self._eval(i.get("show_when", {}))]
         vis = True
@@ -103,6 +180,7 @@ class _MenuLayout:
         for i in s.get("items", []): self.print_item(i["text"])
 
     def _eval(self, c):
+        """Legacy condition grammar, also used by Advanced items."""
         if not c: return True
         if "any_on" in c: return any(self._on(e) for e in c["any_on"])
         if "all_on" in c: return all(self._on(e) for e in c["all_on"])

@@ -258,7 +258,11 @@ _BLANK_MENU = {
         "body": {"file": "LXGWWenKaiScreen.ttf", "size": 27},
     },
     "title": {"text": "", "font": "title", "start_y": 60, "char_spacing": 100, "separator_x": 110},
-    "sections": [],
+    "layout": {"title_x": 30, "content_x_start": 120, "column_width": 240, "column_count": 3,
+               "margin_top": 25, "margin_bottom": 20, "line_height": 45,
+               "header_gap": 15, "header_height": 45, "header_padding": 5, "special_gap": 5},
+    "option_sets": {},
+    "groups": [],
 }
 
 _BLANK_DASHBOARD = {
