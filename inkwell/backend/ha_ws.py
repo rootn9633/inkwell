@@ -29,16 +29,63 @@ async def fetch_entities() -> list[dict]:
         async with session.get(API_URL + "/states", headers=headers) as resp:
             resp.raise_for_status()
             data = await resp.json()
-    out = [
-        {
+    out = []
+    for st in data:
+        attrs = st.get("attributes") or {}
+        e = {
             "entity_id": st["entity_id"],
-            "name": (st.get("attributes") or {}).get("friendly_name") or st["entity_id"],
+            "name": attrs.get("friendly_name") or st["entity_id"],
             "state": st.get("state"),
         }
-        for st in data
-    ]
+        if st["entity_id"].startswith("input_select.") and isinstance(attrs.get("options"), list):
+            e["options"] = attrs["options"]
+        out.append(e)
     out.sort(key=lambda e: e["entity_id"])
     return out
+
+
+async def ws_command(payload: dict, timeout: float = 10.0):
+    """Open a short-lived authed websocket, run one command, return its `result`.
+
+    Used for the HA collection APIs (input_boolean/create, input_select/create, …) —
+    these are websocket-only, so we can't use the REST proxy for them.
+    """
+    if not SUPERVISOR_TOKEN:
+        raise RuntimeError("SUPERVISOR_TOKEN not set — cannot talk to HA")
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(WS_URL, heartbeat=30) as ws:
+            msg = await ws.receive_json()
+            if msg.get("type") == "auth_required":
+                await ws.send_json({"type": "auth", "access_token": SUPERVISOR_TOKEN})
+                msg = await ws.receive_json()
+            if msg.get("type") != "auth_ok":
+                raise RuntimeError(f"HA auth failed: {msg}")
+            cmd = dict(payload)
+            cmd["id"] = 1
+            await ws.send_json(cmd)
+            while True:
+                msg = await asyncio.wait_for(ws.receive_json(), timeout)
+                if msg.get("id") == 1 and msg.get("type") == "result":
+                    if not msg.get("success", False):
+                        raise RuntimeError(str(msg.get("error", "command failed")))
+                    return msg.get("result")
+
+
+async def create_helper(entity_id: str, options=None):
+    """Create a storage-backed helper so its entity_id becomes `entity_id`.
+
+    The collection API derives the id from `name` via slugify, so we pass the
+    object_id as the name (a valid slug already). Supports input_boolean / input_select.
+    """
+    domain, _, object_id = entity_id.partition(".")
+    if domain == "input_boolean":
+        return await ws_command({"type": "input_boolean/create", "name": object_id})
+    if domain == "input_select":
+        opts = list(options or [])
+        if not opts:
+            raise ValueError("input_select needs at least one option")
+        return await ws_command({"type": "input_select/create", "name": object_id, "options": opts})
+    raise ValueError(f"auto-create not supported for domain '{domain}'")
 
 # HA entity_id: lowercase domain.object_id. Display configs only contain entity ids
 # in this exact shape (font filenames, hardware names, menu text don't match), so a

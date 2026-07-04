@@ -182,6 +182,86 @@ async def api_preview_png(request: web.Request) -> web.StreamResponse:
     return web.Response(body=data, content_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
+HELPER_DOMAINS = {"input_boolean", "input_select"}  # domains inkwell can auto-create
+
+
+def _resolve_options(config: dict, entity_id: str) -> list:
+    """Options for a managed input_select — from the Choice item that uses it."""
+    for g in config.get("groups", []):
+        for item in g.get("items", []):
+            if item.get("control") == "choice" and item.get("entity") == entity_id:
+                opts = item.get("options")
+                if isinstance(opts, str):
+                    return list(config.get("option_sets", {}).get(opts, []))
+                if isinstance(opts, list):
+                    return list(opts)
+    return []
+
+
+def _config_helper_targets(config: dict) -> dict:
+    """Referenced input_boolean/input_select entities inkwell can create (+ select options)."""
+    targets = {}
+    for eid in ha_ws.extract_entities(config):
+        domain = eid.split(".", 1)[0]
+        if domain not in HELPER_DOMAINS:
+            continue
+        info = {"entity_id": eid, "domain": domain}
+        if domain == "input_select":
+            info["options"] = _resolve_options(config, eid)
+        targets[eid] = info
+    return targets
+
+
+async def api_missing_helpers(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    try:
+        config = render.load_display_config(name)
+    except FileNotFoundError:
+        return web.json_response({"error": "Not found"}, status=404)
+    targets = _config_helper_targets(config)
+    try:
+        existing = {e["entity_id"] for e in await ha_ws.fetch_entities()}
+    except Exception as e:
+        return web.json_response({"error": str(e), "missing": []}, status=502)
+    missing = []
+    for eid, info in sorted(targets.items()):
+        if eid in existing:
+            continue
+        item = dict(info)
+        if info["domain"] == "input_select" and not info.get("options"):
+            item["needs_options"] = True
+        missing.append(item)
+    return web.json_response({"missing": missing, "managed_total": len(targets)})
+
+
+async def api_create_helpers(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    try:
+        config = render.load_display_config(name)
+    except FileNotFoundError:
+        return web.json_response({"error": "Not found"}, status=404)
+    targets = _config_helper_targets(config)
+    try:
+        existing = {e["entity_id"] for e in await ha_ws.fetch_entities()}
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+    created, errors = [], []
+    for eid, info in sorted(targets.items()):
+        if eid in existing:
+            continue
+        try:
+            if info["domain"] == "input_select" and not info.get("options"):
+                raise ValueError("no options — add a Choice item that uses this select")
+            await ha_ws.create_helper(eid, info.get("options"))
+            created.append(eid)
+        except Exception as e:
+            errors.append({"entity_id": eid, "error": str(e)})
+    if created:
+        await _reindex_and_prime([name])
+        log.info("Created %d helper(s) for %s: %s", len(created), name, created)
+    return web.json_response({"created": created, "errors": errors})
+
+
 async def api_render_now(request: web.Request) -> web.Response:
     name = request.match_info["name"]
     try:
@@ -273,6 +353,8 @@ def create_ingress_app() -> web.Application:
     app.router.add_post("/api/displays/{name}/render", api_render_now)
     app.router.add_post("/api/preview", api_preview)
     app.router.add_get("/api/preview/{name}.png", api_preview_png)
+    app.router.add_get("/api/displays/{name}/missing-helpers", api_missing_helpers)
+    app.router.add_post("/api/displays/{name}/create-helpers", api_create_helpers)
     app.router.add_get("/api/entities", api_entities)
     app.router.add_get("/api/hardware", api_hardware)
     app.router.add_get("/api/renderers", api_renderers)
