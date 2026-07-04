@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.9.2
+
+- Builder polish: option-set and inline choice options render as distinct removable pills;
+  a select-equals condition shows each select as a mini-chip with a labeled "+ select";
+  toggle chips use short entity ids; and item rows are distinct tiles so each delete
+  control clearly belongs to its row.
+- Migration: a simple two-variant item (toggle on / else) is split into two Lines
+  (e.g. 蜂蜜柚子茶 / 蜂蜜柚子氣泡); the Choice separator is split out of the old prefix; and
+  Advanced items show their variant text instead of a blank label.
+
+## 0.9.1
+
+- Legacy migration now recovers Choice options from the live `input_select` entities in HA
+  (the old config didn't store them) and rebuilds the shared `bottles` option set.
+- Choice items support inline options in the builder (not just a named set), and
+  `/api/entities` returns each `input_select`'s options.
+
+## 0.9.0
+
+- Menu builder UI: a structured editor for the new schema — shared **option sets**, a
+  **layout** section, and **groups** of **items** with composable `when` conditions
+  (toggle on / toggle off / select-equals) and Choice items that reference an option set.
+- **Helpers panel**: lists the managed `input_boolean`/`input_select` a menu references that
+  are missing from HA, with a one-click **Create missing helpers** button.
+- One-click **migration** of legacy `sections` menus to the new `groups` format (renders
+  identically). The former "YAML" tab is now **Advanced**.
+
+## 0.8.0
+
+- Helper auto-creation (backend): detect the managed `input_boolean`/`input_select`
+  entities a display references that are missing from HA, and create them over the
+  Supervisor websocket (`input_boolean/create`, `input_select/create` with options
+  resolved from the display's option sets). New endpoints `GET
+  /api/displays/<name>/missing-helpers` and `POST /api/displays/<name>/create-helpers`.
+  Surfaced in the builder UI in the next release.
+
+## 0.7.0
+
+- Menu renderer: new `groups` / `items` / `when` schema — shared `option_sets`, per-item
+  render (line / choice / advanced) and composable `when` conditions (`entity_on`,
+  `entity_off`, `select_equals`), and `hide_if_empty` groups. The bundled `tea_menu`
+  template is rewritten to it (byte-identical output).
+- The legacy `sections` schema still renders via a compatibility path, so existing display
+  configs keep working unchanged.
+
 ## 0.6.0
 
 - Structured menu **section editor** in the Form tab: add / remove / reorder sections

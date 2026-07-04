@@ -83,9 +83,44 @@
     .irow { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
     .irow input[type=text] { flex:1; min-width:7rem; }
     .irow .ent { font-family:ui-monospace, monospace; font-size:.82rem; }
+    .item-row { padding:.22rem .45rem; border-radius:.45rem; background:rgba(127,127,127,.05); }
+    .item-row:hover { background:rgba(127,127,127,.12); }
     .btn.xs { padding:.2rem .45rem; font-size:.8rem; }
     .chip .x { background:none; border:none; color:var(--muted); cursor:pointer; margin-left:.3rem; padding:0; font-size:.8rem; }
     .adv { color:var(--muted); font-size:.83rem; display:flex; align-items:center; gap:.4rem; }
+    .banner { background:rgba(224,165,59,.12); border:1px solid rgba(224,165,59,.4); color:#e0a53b;
+              padding:.5rem .7rem; border-radius:.5rem; font-size:.85rem; margin-bottom:.9rem; }
+    .oset { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; padding:.35rem 0; border-bottom:1px solid var(--line); }
+    .oname { font-family:ui-monospace,monospace; font-size:.82rem; width:6rem; flex:0 0 auto; }
+    .ochips { display:flex; gap:.35rem; flex-wrap:wrap; flex:1; min-width:8rem; align-items:center; }
+    .ochip { display:inline-flex; align-items:center; gap:.15rem; font-size:.8rem; background:var(--bg);
+             border:1px solid var(--line); border-radius:.45rem; padding:.18rem .2rem .18rem .55rem; }
+    .ochip .x { background:none; border:0; color:var(--muted); cursor:pointer; font-size:.72rem; line-height:1;
+                padding:.1rem .3rem; border-radius:.3rem; }
+    .ochip .x:hover { color:var(--danger); background:rgba(127,127,127,.16); }
+    .second { display:inline-flex; align-items:center; gap:.1rem; font-size:.72rem; background:rgba(53,196,166,.18);
+              border-radius:.3rem; padding:.05rem .1rem .05rem .4rem; }
+    .second .x { background:none; border:0; color:inherit; opacity:.55; cursor:pointer; font-size:.68rem; padding:0 .2rem; }
+    .secondadd { font-size:.68rem; color:var(--muted); background:transparent; border:1px dashed rgba(53,196,166,.45);
+                 border-radius:.3rem; cursor:pointer; padding:.05rem .35rem; }
+    .oadd { width:6rem !important; min-width:0 !important; font-size:.8rem; }
+    .lgrid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+    .lf-l { display:flex; flex-direction:column; gap:.2rem; font-size:.75rem; color:var(--muted); }
+    .lf-l input { width:100%; }
+    .rtag { font-size:.72rem; font-weight:600; border-radius:.35rem; padding:.12rem .4rem; flex:0 0 auto; color:#35c4a6; border:1px solid var(--line); }
+    .when { display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; flex:1; }
+    .wlbl { color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; flex:0 0 auto; }
+    .wc { display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem; font-family:ui-monospace,monospace;
+          border-radius:.4rem; padding:.1rem .2rem .1rem .45rem; color:#35c4a6;
+          background:rgba(53,196,166,.12); border:1px solid rgba(53,196,166,.38); }
+    .wc .cst { font-family:system-ui; font-size:.62rem; font-weight:700; padding:0 .3rem; border-radius:1rem; background:rgba(53,196,166,.22); }
+    .wc.off .cst { color:var(--muted); background:rgba(127,127,127,.18); }
+    .wc .x { background:none; border:0; color:inherit; opacity:.6; cursor:pointer; font-size:.75rem; padding:0 .2rem; }
+    .wc.add { color:var(--muted); background:transparent; border:1px dashed var(--line); cursor:pointer; font-family:system-ui; padding:.1rem .4rem; }
+    .wc.always { color:var(--muted); background:transparent; border:0; font-style:italic; font-family:system-ui; }
+    .helper-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--line); }
+    .helper-row .hid { font-family:ui-monospace,monospace; font-size:.78rem; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hstat { font-size:.75rem; flex:0 0 auto; } .hstat.ok { color:#16a34a; } .hstat.missing { color:#e0a53b; }
     .yamlerr { color:var(--danger); font-size:.82rem; margin-top:.4rem; white-space:pre-wrap; }
 
     /* modal */
@@ -157,7 +192,7 @@
           <div class="panel">
             <div class="tabs">
               <button class="tab" :class="tab==='form' && 'active'" @click="setTab('form')">Form</button>
-              <button class="tab" :class="tab==='yaml' && 'active'" @click="setTab('yaml')">YAML</button>
+              <button class="tab" :class="tab==='yaml' && 'active'" @click="setTab('yaml')">Advanced</button>
             </div>
 
             <!-- FORM -->
@@ -191,6 +226,34 @@
                 </div>
               </template>
 
+              <template x-if="isLegacyMenu()">
+                <div class="banner">This menu uses the old format.
+                  <button class="btn xs" @click="convertLegacy()" style="margin-left:.4rem">Convert to new format</button>
+                  <span class="lbl" style="margin-left:.3rem">or edit it in the Advanced tab.</span>
+                </div>
+              </template>
+
+              <!-- OPTION SETS -->
+              <template x-if="isMenu() && config.option_sets">
+                <div class="field">
+                  <label>Option sets <span class="lbl">— shared choice lists</span></label>
+                  <template x-for="(opts, sname) in config.option_sets" :key="sname">
+                    <div class="oset">
+                      <input type="text" class="oname" :value="sname" @change="renameOptionSet(sname, $event)">
+                      <div class="ochips">
+                        <template x-for="(o, oi) in opts" :key="oi">
+                          <span class="ochip"><span x-text="o"></span><button class="x" @click="removeOption(sname, oi)">✕</button></span>
+                        </template>
+                        <input type="text" class="oadd" placeholder="+ option" @change="addOption(sname, $event)">
+                      </div>
+                      <span class="lbl" x-text="'used by ' + optionSetUsage(sname)"></span>
+                      <button class="btn xs danger" @click="removeOptionSet(sname)">✕</button>
+                    </div>
+                  </template>
+                  <button class="btn xs" @click="addOptionSet()" style="margin-top:.45rem">+ New set</button>
+                </div>
+              </template>
+
               <div class="field">
                 <label>Fonts</label>
                 <table class="fonts">
@@ -220,99 +283,117 @@
                 </div>
               </div>
 
-              <!-- menu sections -->
-              <template x-if="isMenu()">
+              <!-- LAYOUT -->
+              <template x-if="isMenu() && config.layout">
                 <div class="field">
-                  <label>Sections</label>
-                  <template x-for="(section, si) in (config.sections || [])" :key="si">
-                    <div class="section">
-                      <div class="section-head">
-                        <span class="badge" x-text="section.type"></span>
-                        <span class="spacer"></span>
-                        <button class="btn xs" @click="moveSection(si,-1)" :disabled="si===0">↑</button>
-                        <button class="btn xs" @click="moveSection(si,1)" :disabled="si===(config.sections.length-1)">↓</button>
-                        <button class="btn xs danger" @click="removeSection(si)">✕</button>
-                      </div>
-
-                      <template x-if="section.type !== 'bottles'">
-                        <input type="text" class="hdr" placeholder="Header" x-model="section.header" @input="edited()">
-                      </template>
-
-                      <template x-if="section.type === 'conditional'">
-                        <div class="cond">
-                          <label class="chk">
-                            <input type="checkbox"
-                              :checked="section.condition && section.condition.require_any_item_active"
-                              @change="ensureCond(section).require_any_item_active = $event.target.checked; edited()">
-                            require an active item
-                          </label>
-                          <div class="reqall">
-                            <span class="lbl">Require all on:</span>
-                            <template x-for="(e, ei) in ((section.condition && section.condition.require_all) || [])" :key="ei">
-                              <span class="chip"><span x-text="e"></span><button class="x" @click="removeRequireAll(section, ei)">✕</button></span>
-                            </template>
-                            <button class="btn xs" @click="openPickerFor(id => requireAll(section).push(id))">+ entity</button>
-                          </div>
-                        </div>
-                      </template>
-
-                      <div class="items">
-                        <template x-for="(item, ii) in (section.items || [])" :key="ii">
-                          <div class="item-row">
-                            <template x-if="section.type === 'bottles'">
-                              <div class="irow">
-                                <input type="text" class="ent" placeholder="entity_id" x-model="item.entity" @input="edited()">
-                                <button class="btn xs" @click="openPickerFor(id => { item.entity = id })">pick</button>
-                                <input type="text" placeholder="prefix" x-model="item.prefix" @input="edited()">
-                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
-                              </div>
-                            </template>
-                            <template x-if="section.type === 'static'">
-                              <div class="irow">
-                                <input type="text" placeholder="text" x-model="item.text" @input="edited()">
-                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
-                              </div>
-                            </template>
-                            <template x-if="section.type === 'conditional'">
-                              <div class="irow">
-                                <template x-if="isAdvancedItem(item)">
-                                  <span class="adv"><span class="badge">advanced</span> edit in YAML tab</span>
-                                </template>
-                                <template x-if="!isAdvancedItem(item)">
-                                  <input type="text" placeholder="text" x-model="item.text" @input="edited()">
-                                </template>
-                                <template x-if="!isAdvancedItem(item)">
-                                  <select @change="setShowWhenMode(item, $event.target.value)">
-                                    <option value="always" :selected="showWhenMode(item)==='always'">Always</option>
-                                    <option value="entity_on" :selected="showWhenMode(item)==='entity_on'">When entity on</option>
-                                  </select>
-                                </template>
-                                <template x-if="!isAdvancedItem(item) && showWhenMode(item)==='entity_on'">
-                                  <input type="text" class="ent" placeholder="entity_id" x-model="item.show_when.entity_on" @input="edited()">
-                                </template>
-                                <template x-if="!isAdvancedItem(item) && showWhenMode(item)==='entity_on'">
-                                  <button class="btn xs" @click="openPickerFor(id => { item.show_when.entity_on = id })">pick</button>
-                                </template>
-                                <button class="btn xs danger" @click="removeItem(section, ii)">✕</button>
-                              </div>
-                            </template>
-                          </div>
-                        </template>
-                        <button class="btn xs" @click="addItem(section)">+ Item</button>
-                      </div>
-                    </div>
-                  </template>
-                  <div class="row" style="margin-top:.6rem">
-                    <span class="lbl">Add section:</span>
-                    <button class="btn" @click="addSection('bottles')">Bottles</button>
-                    <button class="btn" @click="addSection('static')">Static</button>
-                    <button class="btn" @click="addSection('conditional')">Conditional</button>
+                  <label>Layout</label>
+                  <div class="lgrid">
+                    <label class="lf-l">columns<input type="number" min="1" x-model.number="config.layout.column_count" @input="edited()"></label>
+                    <label class="lf-l">column width<input type="number" x-model.number="config.layout.column_width" @input="edited()"></label>
+                    <label class="lf-l">line height<input type="number" x-model.number="config.layout.line_height" @input="edited()"></label>
+                    <label class="lf-l">top margin<input type="number" x-model.number="config.layout.margin_top" @input="edited()"></label>
                   </div>
                 </div>
               </template>
 
-              <p class="hint">Layout numbers, dashboard cards, and advanced item conditions
-                (variants, select-equals) are edited in the <b>YAML</b> tab.</p>
+              <!-- GROUPS -->
+              <template x-if="isMenu() && config.groups">
+                <div class="field">
+                  <label>Groups</label>
+                  <template x-for="(g, gi) in config.groups" :key="gi">
+                    <div class="section">
+                      <div class="section-head">
+                        <template x-if="hasHeader(g)">
+                          <input type="text" placeholder="Header" x-model="g.header" @input="edited()" style="flex:1;min-width:6rem">
+                        </template>
+                        <template x-if="!hasHeader(g)">
+                          <span class="lbl" style="flex:1">No header</span>
+                        </template>
+                        <button class="btn xs" @click="toggleHeader(g)" x-text="hasHeader(g) ? '− header' : '+ header'"></button>
+                        <label class="chk" style="font-size:.72rem"><input type="checkbox" :checked="g.hide_if_empty !== false" @change="g.hide_if_empty = $event.target.checked; edited()"> hide if empty</label>
+                        <button class="btn xs" @click="moveGroup(gi,-1)" :disabled="gi===0">↑</button>
+                        <button class="btn xs" @click="moveGroup(gi,1)" :disabled="gi===config.groups.length-1">↓</button>
+                        <button class="btn xs danger" @click="removeGroup(gi)">✕</button>
+                      </div>
+
+                      <div class="items">
+                        <template x-for="(it, ii) in (g.items || [])" :key="ii">
+                          <div class="item-row">
+                            <div class="irow">
+                              <template x-if="itemKind(it) !== 'advanced'">
+                                <input type="text" placeholder="text" x-model="it.text" @input="edited()" style="width:118px;flex:0 0 auto;min-width:0">
+                              </template>
+
+                              <template x-if="itemKind(it) === 'choice'">
+                                <span class="irow" style="gap:.35rem;flex:1">
+                                  <span class="rtag">Choice</span>
+                                  <input type="text" title="separator" placeholder="：" :value="it.separator ?? '：'" @input="it.separator=$event.target.value; edited()" style="width:2.4rem;flex:0 0 auto;text-align:center;min-width:0">
+                                  <input type="text" class="ent" placeholder="input_select.…" x-model="it.entity" @input="edited()" style="width:150px;flex:0 0 auto;min-width:0">
+                                  <button class="btn xs" @click="openPickerFor(id => { it.entity = id })">pick</button>
+                                  <select @change="setChoiceOptions(it, $event.target.value)">
+                                    <option value="__inline__" :selected="!choiceUsesSet(it)">inline options</option>
+                                    <template x-for="s in optionSetNames()" :key="s"><option :value="s" :selected="it.options===s" x-text="'set: '+s"></option></template>
+                                  </select>
+                                  <template x-if="!choiceUsesSet(it)">
+                                    <span class="ochips" style="flex-basis:100%;margin-top:.25rem">
+                                      <template x-for="(o,oi) in (Array.isArray(it.options)?it.options:[])" :key="oi"><span class="ochip"><span x-text="o"></span><button class="x" @click="removeInlineOption(it,oi)">✕</button></span></template>
+                                      <input type="text" class="oadd" placeholder="+ option" @change="addInlineOption(it,$event)">
+                                    </span>
+                                  </template>
+                                </span>
+                              </template>
+
+                              <template x-if="itemKind(it) === 'advanced'">
+                                <span class="adv"><span class="badge">advanced</span> <b style="font-weight:600" x-text="advancedSummary(it)"></b> — edit in Advanced tab</span>
+                              </template>
+
+                              <template x-if="itemKind(it) === 'line'">
+                                <span class="when">
+                                  <span class="wlbl" x-show="(it.when||[]).length">when</span>
+                                  <template x-for="(c, ci) in (it.when || [])" :key="ci">
+                                    <span>
+                                      <template x-if="condType(c)==='entity_on' || condType(c)==='entity_off'">
+                                        <span class="wc" :class="condType(c)==='entity_off' && 'off'"><span x-text="short(condEntity(c))"></span><span class="cst" x-text="condType(c)==='entity_off' ? 'OFF':'ON'"></span><button class="x" @click="removeCond(it, ci)">✕</button></span>
+                                      </template>
+                                      <template x-if="condType(c)==='select_equals'">
+                                        <span class="wc">
+                                          <span class="cst">any</span>
+                                          <template x-for="(e, ei) in seEnts(c)" :key="ei">
+                                            <span class="second"><span x-text="short(e)"></span><button class="x" @click="seRemoveEnt(c, ei)">✕</button></span>
+                                          </template>
+                                          <button class="secondadd" @click="seAddEnt(c)" title="add another select — matches if ANY equals the value">+ select</button>
+                                          <span class="cst">=</span>
+                                          <input type="text" placeholder="value" :value="c.select_equals.value" @input="c.select_equals.value=$event.target.value; edited()" style="width:96px;font-size:.75rem;padding:1px 5px;min-width:0">
+                                          <button class="x" @click="removeCond(it, ci)" title="remove condition">✕</button>
+                                        </span>
+                                      </template>
+                                    </span>
+                                  </template>
+                                  <span class="wc always" x-show="!(it.when||[]).length">always</span>
+                                  <button class="wc add" @click="addCond(it,'entity_on')">+ on</button>
+                                  <button class="wc add" @click="addCond(it,'entity_off')">+ off</button>
+                                  <button class="wc add" @click="addCond(it,'select_equals')">+ =</button>
+                                </span>
+                              </template>
+
+                              <button class="btn xs danger" @click="removeItem(g, ii)" style="margin-left:auto">✕</button>
+                            </div>
+                          </div>
+                        </template>
+                        <div class="row" style="padding-top:.4rem">
+                          <span class="lbl">Add:</span>
+                          <button class="btn xs" @click="addItem(g,'line')">Line</button>
+                          <button class="btn xs" @click="addItem(g,'choice')">Choice</button>
+                          <button class="btn xs" @click="addItem(g,'advanced')">Advanced</button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <button class="btn" @click="addGroup()" style="width:100%;justify-content:center;border-style:dashed;margin-top:.5rem">+ Add group</button>
+                </div>
+              </template>
+
+              <p class="hint">Advanced item conditions and the dashboard renderer are edited in the <b>Advanced</b> tab.</p>
             </div>
 
             <!-- YAML -->
@@ -326,12 +407,33 @@
             </div>
           </div>
 
-          <!-- PREVIEW -->
-          <div class="panel preview">
-            <div class="muted" style="font-size:.8rem;margin-bottom:.5rem">
-              Preview<span x-show="previewErr" class="msg err" style="margin-left:.5rem" x-text="previewErr"></span>
+          <!-- PREVIEW + HELPERS -->
+          <div style="display:flex;flex-direction:column;gap:1rem">
+            <div class="panel preview">
+              <div class="muted" style="font-size:.8rem;margin-bottom:.5rem">
+                Preview<span x-show="previewErr" class="msg err" style="margin-left:.5rem" x-text="previewErr"></span>
+              </div>
+              <img x-show="previewSrc" :src="previewSrc" :alt="name + ' preview'">
             </div>
-            <img x-show="previewSrc" :src="previewSrc" :alt="name + ' preview'">
+
+            <template x-if="isMenu() && config.groups">
+              <div class="panel">
+                <div class="muted" style="font-size:.8rem;margin-bottom:.4rem">Helpers · owned by Inkwell</div>
+                <template x-if="helpersChecked && missingHelpers.length === 0">
+                  <div class="hstat ok" style="font-size:.82rem">All referenced helpers exist in HA ✓</div>
+                </template>
+                <template x-for="m in missingHelpers" :key="m.entity_id">
+                  <div class="helper-row">
+                    <span class="hid" x-text="m.entity_id"></span>
+                    <span class="hstat missing" x-text="m.needs_options ? 'needs options' : 'not created'"></span>
+                  </div>
+                </template>
+                <button class="btn primary" x-show="missingHelpers.length" @click="createMissing()" :disabled="busy"
+                  style="width:100%;justify-content:center;margin-top:.6rem"
+                  x-text="'Create ' + missingHelpers.length + ' missing helper' + (missingHelpers.length===1?'':'s')"></button>
+                <p class="hint" style="margin-top:.5rem">Inkwell owns these. A gating toggle renders no line. Removing an item won't delete its helper.</p>
+              </div>
+            </template>
           </div>
         </div>
       </div>

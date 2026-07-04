@@ -2,10 +2,10 @@
 
 Server-side e-ink display renderer with a web UI, running as a Home Assistant add-on.
 
-> **Status:** Phase 5 — full editing UI: create/edit displays via a settings form (now
-> including a structured menu section editor), a validated YAML editor, font upload, entity
-> picker, and on-demand render, all with live preview. Onboarding wizard + device fleet view
-> come next. See `.notes/addon-design.md`.
+> **Status:** menu builder — a structured editor for the new menu schema (option sets,
+> groups, items with composable conditions), inkwell-managed HA helpers with one-click
+> creation, legacy-format migration, and an Advanced (YAML) tab. Onboarding wizard, device
+> fleet view, and ESPHome generation come next. See `.notes/addon-design.md`.
 
 ## Home Assistant state sync
 
