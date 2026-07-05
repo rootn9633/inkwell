@@ -87,6 +87,35 @@ async def create_helper(entity_id: str, options=None):
         return await ws_command({"type": "input_select/create", "name": object_id, "options": opts})
     raise ValueError(f"auto-create not supported for domain '{domain}'")
 
+
+async def update_helper(entity_id: str, options=None, name=None):
+    """Update an existing storage helper (collection preserves fields not re-passed).
+
+    HA's `<domain>/update` requires `name` (it's not optional), so default it to the
+    object_id — the same slug create_helper uses, keeping entity_id stable.
+    """
+    domain, _, object_id = entity_id.partition(".")
+    payload = {"type": f"{domain}/update", f"{domain}_id": object_id,
+               "name": name if name is not None else object_id}
+    if options is not None:
+        payload["options"] = list(options)
+    return await ws_command(payload)
+
+
+async def delete_helper(entity_id: str):
+    domain, _, object_id = entity_id.partition(".")
+    return await ws_command({"type": f"{domain}/delete", f"{domain}_id": object_id})
+
+
+async def list_storage_helpers(domain: str) -> dict:
+    """entity_id -> record for storage-backed helpers of a domain (vs YAML, which isn't listed)."""
+    out = {}
+    for item in (await ws_command({"type": f"{domain}/list"}) or []):
+        oid = item.get("id")
+        if oid:
+            out[f"{domain}.{oid}"] = item
+    return out
+
 # HA entity_id: lowercase domain.object_id. Display configs only contain entity ids
 # in this exact shape (font filenames, hardware names, menu text don't match), so a
 # recursive scan for this pattern reliably yields a display's watched entities.

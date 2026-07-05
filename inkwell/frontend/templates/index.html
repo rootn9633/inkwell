@@ -120,7 +120,7 @@
     .wc.always { color:var(--muted); background:transparent; border:0; font-style:italic; font-family:system-ui; }
     .helper-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--line); }
     .helper-row .hid { font-family:ui-monospace,monospace; font-size:.78rem; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .hstat { font-size:.75rem; flex:0 0 auto; } .hstat.ok { color:#16a34a; } .hstat.missing { color:#e0a53b; }
+    .hstat { font-size:.75rem; flex:0 0 auto; } .hstat.ok { color:#16a34a; } .hstat.missing { color:#e0a53b; } .hstat.ext { color:var(--muted); }
     .yamlerr { color:var(--danger); font-size:.82rem; margin-top:.4rem; white-space:pre-wrap; }
 
     /* modal */
@@ -419,19 +419,25 @@
             <template x-if="isMenu() && config.groups">
               <div class="panel">
                 <div class="muted" style="font-size:.8rem;margin-bottom:.4rem">Helpers · owned by Inkwell</div>
-                <template x-if="helpersChecked && missingHelpers.length === 0">
-                  <div class="hstat ok" style="font-size:.82rem">All referenced helpers exist in HA ✓</div>
+                <template x-if="helpersChecked && helpers.length === 0">
+                  <div class="hstat ok" style="font-size:.82rem">No helpers referenced by this display.</div>
                 </template>
-                <template x-for="m in missingHelpers" :key="m.entity_id">
+                <template x-for="h in helpers" :key="h.entity_id">
                   <div class="helper-row">
-                    <span class="hid" x-text="m.entity_id"></span>
-                    <span class="hstat missing" x-text="m.needs_options ? 'needs options' : 'not created'"></span>
+                    <span class="hid" x-text="h.entity_id"></span>
+                    <span class="hstat" :class="helperStatusClass(h)" x-text="helperStatusLabel(h)"></span>
                   </div>
                 </template>
-                <button class="btn primary" x-show="missingHelpers.length" @click="createMissing()" :disabled="busy"
-                  style="width:100%;justify-content:center;margin-top:.6rem"
-                  x-text="'Create ' + missingHelpers.length + ' missing helper' + (missingHelpers.length===1?'':'s')"></button>
-                <p class="hint" style="margin-top:.5rem">Inkwell owns these. A gating toggle renders no line. Removing an item won't delete its helper.</p>
+                <div class="row" style="flex-wrap:wrap;gap:.4rem;margin-top:.6rem">
+                  <button class="btn primary" x-show="missingHelpers().length" @click="createHelpers()" :disabled="busy"
+                    x-text="'Create ' + missingHelpers().length + ' missing'"></button>
+                  <button class="btn" x-show="driftedHelpers().length" @click="syncHelpers()" :disabled="busy"
+                    x-text="'Sync ' + driftedHelpers().length + ' option list' + (driftedHelpers().length===1?'':'s')"></button>
+                  <button class="btn" x-show="adoptableHelpers().length" @click="adoptHelpers()" :disabled="busy"
+                    x-text="'Adopt ' + adoptableHelpers().length"></button>
+                  <button class="btn" @click="cleanupHelpers()" :disabled="busy">Clean up unused</button>
+                </div>
+                <p class="hint" style="margin-top:.5rem">Inkwell only ever changes helpers it owns (◈), and never a helper's value. Cleanup deletes only owned helpers no longer referenced by any display.</p>
               </div>
             </template>
           </div>

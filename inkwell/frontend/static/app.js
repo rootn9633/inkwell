@@ -36,7 +36,7 @@ document.addEventListener('alpine:init', () => {
     _pickCb: null,
 
     // helpers panel
-    missingHelpers: [], helpersChecked: false,
+    helpers: [], helpersChecked: false,
 
     async init() {
       await this.loadList();
@@ -91,10 +91,10 @@ document.addEventListener('alpine:init', () => {
         this.yamlText = dump(this.config);
         this.previewErr = null;
         this.dirty = false;
-        this.missingHelpers = []; this.helpersChecked = false;
+        this.helpers = []; this.helpersChecked = false;
         this.view = 'edit';
         this.livePreview();
-        this.loadMissing();
+        this.loadHelpers();
       } catch (e) { this.err = 'Open failed: ' + e; }
     },
     backToList() {
@@ -346,25 +346,67 @@ document.addEventListener('alpine:init', () => {
     choiceUsesSet(it) { return typeof it.options === 'string'; },
 
     // ---- helpers panel ----
-    async loadMissing() {
+    async loadHelpers() {
       if (!this.name) return;
       try {
-        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/missing-helpers');
-        this.missingHelpers = (await r.json()).missing || [];
-      } catch (e) { this.missingHelpers = []; }
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/helpers');
+        this.helpers = (await r.json()).helpers || [];
+      } catch (e) { this.helpers = []; }
       this.helpersChecked = true;
     },
-    async createMissing() {
+    missingHelpers() { return this.helpers.filter(h => !h.exists); },
+    driftedHelpers() { return this.helpers.filter(h => h.drifted); },
+    adoptableHelpers() { return this.helpers.filter(h => h.exists && h.storage && !h.owned); },
+    allHelpersExist() { return this.helpers.length > 0 && this.helpers.every(h => h.exists); },
+    helperStatusLabel(h) {
+      if (!h.exists) return h.needs_options ? 'needs options' : 'not created';
+      if (h.drifted) return 'options drifted';
+      if (h.owned) return 'owned';
+      return h.storage ? 'not managed' : 'external (YAML)';
+    },
+    helperStatusClass(h) {
+      if (!h.exists || h.drifted) return 'missing';
+      return h.owned ? 'ok' : 'ext';
+    },
+    async _helperOp(path, label) {
       this.busy = true; this.msg = null;
       try {
-        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/create-helpers', { method: 'POST' });
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + path, { method: 'POST' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
-        const errs = (d.errors || []).length;
-        this.msg = { ok: errs === 0, text: `Created ${d.created.length} helper(s)` + (errs ? `; ${errs} failed` : '') };
-        await this.loadMissing();
+        await this.loadHelpers();
         this.schedulePreview();
-      } catch (e) { this.msg = { ok: false, text: 'Create failed: ' + e.message }; }
+        return d;
+      } catch (e) { this.msg = { ok: false, text: label + ' failed: ' + e.message }; return null; }
+      finally { this.busy = false; }
+    },
+    async createHelpers() {
+      const d = await this._helperOp('/create-helpers', 'Create');
+      if (d) { const e = (d.errors || []).length; this.msg = { ok: e === 0, text: `Created ${d.created.length}` + (e ? `; ${e} failed` : '') }; }
+    },
+    async syncHelpers() {
+      const d = await this._helperOp('/sync-helpers', 'Sync');
+      if (d) {
+        const w = (d.warnings || []).map(x => `${x.entity_id} dropped "${x.dropped_value}"`);
+        this.msg = { ok: (d.errors || []).length === 0, text: `Synced ${d.synced.length}` + (w.length ? '; ' + w.join(', ') : '') };
+      }
+    },
+    async adoptHelpers() {
+      const d = await this._helperOp('/adopt-helpers', 'Adopt');
+      if (d) this.msg = { ok: true, text: `Adopted ${d.adopted.length}` + ((d.skipped || []).length ? `; ${d.skipped.length} not storage` : '') };
+    },
+    async cleanupHelpers() {
+      let unused = [];
+      try { const r = await fetch(this.base + '/api/unused-helpers'); unused = (await r.json()).unused || []; } catch (e) {}
+      if (!unused.length) { this.msg = { ok: true, text: 'No unused inkwell-owned helpers.' }; return; }
+      if (!confirm('Delete these inkwell-owned helpers, no longer used by any display?\n\n' + unused.join('\n'))) return;
+      this.busy = true; this.msg = null;
+      try {
+        const r = await fetch(this.base + '/api/cleanup-helpers', { method: 'POST' });
+        const d = await r.json();
+        this.msg = { ok: (d.errors || []).length === 0, text: `Deleted ${d.deleted.length} unused helper(s)` };
+        await this.loadHelpers();
+      } catch (e) { this.msg = { ok: false, text: 'Cleanup failed: ' + e.message }; }
       finally { this.busy = false; }
     },
 
@@ -388,7 +430,7 @@ document.addEventListener('alpine:init', () => {
           : { ok: false, text: 'Saved, but render failed: ' + (d.error || '') };
         if (this.tab === 'form') this.yamlText = dump(this.config);
         else this.buildFontRows();
-        this.loadMissing();
+        this.loadHelpers();
       } catch (e) { this.msg = { ok: false, text: 'Save failed: ' + e.message }; }
       finally { this.busy = false; }
     },

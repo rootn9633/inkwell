@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.3
+
+- **Helper lifecycle — inkwell as source of truth.** An ownership ledger (`/data/helpers.json`)
+  is the sole authority for which helpers inkwell may change; it projects config → HA one way
+  (existence, options, name) and never touches a helper's value or area. Ledger loss degrades
+  to create-only.
+- **Status-driven Helpers panel** with explicit actions: **Create** missing, **Sync** owned
+  `input_select` options to match the config (value preserved; warns if the current value is
+  dropped), **Adopt** a referenced `.storage` helper into the ledger (YAML helpers can't be
+  adopted — shown as `external (YAML)`), and **Clean up unused** (deletes only owned helpers no
+  longer referenced by any display).
+- `ha_ws` gained `update_helper` / `delete_helper` / `list_storage_helpers`. Fixed:
+  `input_select/update` requires a `name` key (Sync would otherwise always fail).
+
 ## 0.9.2
 
 - Builder polish: option-set and inline choice options render as distinct removable pills;

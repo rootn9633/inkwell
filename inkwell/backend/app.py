@@ -20,6 +20,7 @@ import jinja2
 from aiohttp import web
 
 import ha_ws
+import ledger
 import render
 
 APP_DIR = Path(__file__).parent
@@ -212,7 +213,19 @@ def _config_helper_targets(config: dict) -> dict:
     return targets
 
 
-async def api_missing_helpers(request: web.Request) -> web.Response:
+def _all_referenced_targets() -> set:
+    """Helper entity_ids referenced by any display (for orphan detection)."""
+    refs = set()
+    for name in render.list_displays():
+        try:
+            refs |= set(_config_helper_targets(render.load_display_config(name)))
+        except Exception:
+            continue
+    return refs
+
+
+async def api_helpers_status(request: web.Request) -> web.Response:
+    """Per-helper status for a display: exists / owned / storage / drifted (selects)."""
     name = request.match_info["name"]
     try:
         config = render.load_display_config(name)
@@ -220,18 +233,35 @@ async def api_missing_helpers(request: web.Request) -> web.Response:
         return web.json_response({"error": "Not found"}, status=404)
     targets = _config_helper_targets(config)
     try:
-        existing = {e["entity_id"] for e in await ha_ws.fetch_entities()}
+        by_id = {e["entity_id"]: e for e in await ha_ws.fetch_entities()}
     except Exception as e:
-        return web.json_response({"error": str(e), "missing": []}, status=502)
-    missing = []
-    for eid, info in sorted(targets.items()):
-        if eid in existing:
-            continue
-        item = dict(info)
-        if info["domain"] == "input_select" and not info.get("options"):
-            item["needs_options"] = True
-        missing.append(item)
-    return web.json_response({"missing": missing, "managed_total": len(targets)})
+        return web.json_response({"error": str(e), "helpers": []}, status=502)
+    led = ledger.load()
+    storage = {}
+    for domain in {t["domain"] for t in targets.values()}:
+        try:
+            storage |= await ha_ws.list_storage_helpers(domain)
+        except Exception:
+            pass
+    helpers = []
+    for eid, t in sorted(targets.items()):
+        exists = eid in by_id
+        s = {"entity_id": eid, "domain": t["domain"], "exists": exists,
+             "owned": eid in led, "storage": eid in storage}
+        if t["domain"] == "input_select":
+            desired = t.get("options") or []
+            s["desired_options"] = desired
+            if not desired:
+                s["needs_options"] = True
+            if exists and s["owned"] and desired:
+                cur = by_id[eid].get("options") or []
+                if cur != desired:
+                    s["drifted"] = True
+                    val = by_id[eid].get("state")
+                    if val not in desired and val not in (None, "", "unknown", "unavailable"):
+                        s["value_drop"] = val
+        helpers.append(s)
+    return web.json_response({"helpers": helpers})
 
 
 async def api_create_helpers(request: web.Request) -> web.Response:
@@ -251,8 +281,9 @@ async def api_create_helpers(request: web.Request) -> web.Response:
             continue
         try:
             if info["domain"] == "input_select" and not info.get("options"):
-                raise ValueError("no options — add a Choice item that uses this select")
+                raise ValueError("no options — add options to the Choice that uses this select")
             await ha_ws.create_helper(eid, info.get("options"))
+            ledger.add(eid, info["domain"])   # created => inkwell owns it
             created.append(eid)
         except Exception as e:
             errors.append({"entity_id": eid, "error": str(e)})
@@ -260,6 +291,89 @@ async def api_create_helpers(request: web.Request) -> web.Response:
         await _reindex_and_prime([name])
         log.info("Created %d helper(s) for %s: %s", len(created), name, created)
     return web.json_response({"created": created, "errors": errors})
+
+
+async def api_sync_helpers(request: web.Request) -> web.Response:
+    """Push owned input_select options to match the display's option sets (value preserved)."""
+    name = request.match_info["name"]
+    try:
+        config = render.load_display_config(name)
+    except FileNotFoundError:
+        return web.json_response({"error": "Not found"}, status=404)
+    targets = _config_helper_targets(config)
+    led = ledger.load()
+    try:
+        by_id = {e["entity_id"]: e for e in await ha_ws.fetch_entities()}
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+    synced, warnings, errors = [], [], []
+    for eid, t in sorted(targets.items()):
+        if t["domain"] != "input_select" or eid not in led or eid not in by_id:
+            continue
+        desired = t.get("options") or []
+        if not desired or (by_id[eid].get("options") or []) == desired:
+            continue
+        try:
+            await ha_ws.update_helper(eid, options=desired)
+            synced.append(eid)
+            val = by_id[eid].get("state")
+            if val not in desired and val not in (None, "", "unknown", "unavailable"):
+                warnings.append({"entity_id": eid, "dropped_value": val})
+        except Exception as e:
+            errors.append({"entity_id": eid, "error": str(e)})
+    if synced:
+        await _reindex_and_prime([name])
+    return web.json_response({"synced": synced, "warnings": warnings, "errors": errors})
+
+
+async def api_adopt_helpers(request: web.Request) -> web.Response:
+    """Adopt referenced *storage* helpers (not YAML) into inkwell's ledger."""
+    name = request.match_info["name"]
+    try:
+        config = render.load_display_config(name)
+    except FileNotFoundError:
+        return web.json_response({"error": "Not found"}, status=404)
+    targets = _config_helper_targets(config)
+    led = ledger.load()
+    storage = {}
+    for domain in {t["domain"] for t in targets.values()}:
+        try:
+            storage |= await ha_ws.list_storage_helpers(domain)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=502)
+    adopted, skipped = [], []
+    for eid, t in sorted(targets.items()):
+        if eid in led:
+            continue
+        if eid in storage:
+            ledger.add(eid, t["domain"], adopted=True)
+            adopted.append(eid)
+        else:
+            skipped.append(eid)  # YAML/non-storage — inkwell can't manage it
+    return web.json_response({"adopted": adopted, "skipped": skipped})
+
+
+async def api_unused_helpers(request: web.Request) -> web.Response:
+    referenced = _all_referenced_targets()
+    unused = [eid for eid in sorted(ledger.load()) if eid not in referenced]
+    return web.json_response({"unused": unused})
+
+
+async def api_cleanup_helpers(request: web.Request) -> web.Response:
+    referenced = _all_referenced_targets()
+    deleted, errors = [], []
+    for eid in sorted(ledger.load()):
+        if eid in referenced:
+            continue
+        try:
+            await ha_ws.delete_helper(eid)
+            ledger.remove(eid)
+            deleted.append(eid)
+        except Exception as e:
+            errors.append({"entity_id": eid, "error": str(e)})
+    if deleted:
+        log.info("Cleaned up %d unused helper(s): %s", len(deleted), deleted)
+    return web.json_response({"deleted": deleted, "errors": errors})
 
 
 async def api_render_now(request: web.Request) -> web.Response:
@@ -353,8 +467,12 @@ def create_ingress_app() -> web.Application:
     app.router.add_post("/api/displays/{name}/render", api_render_now)
     app.router.add_post("/api/preview", api_preview)
     app.router.add_get("/api/preview/{name}.png", api_preview_png)
-    app.router.add_get("/api/displays/{name}/missing-helpers", api_missing_helpers)
+    app.router.add_get("/api/displays/{name}/helpers", api_helpers_status)
     app.router.add_post("/api/displays/{name}/create-helpers", api_create_helpers)
+    app.router.add_post("/api/displays/{name}/sync-helpers", api_sync_helpers)
+    app.router.add_post("/api/displays/{name}/adopt-helpers", api_adopt_helpers)
+    app.router.add_get("/api/unused-helpers", api_unused_helpers)
+    app.router.add_post("/api/cleanup-helpers", api_cleanup_helpers)
     app.router.add_get("/api/entities", api_entities)
     app.router.add_get("/api/hardware", api_hardware)
     app.router.add_get("/api/renderers", api_renderers)
