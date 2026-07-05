@@ -18,6 +18,7 @@ document.addEventListener('alpine:init', () => {
     tab: 'form',
     yamlText: '',
     yamlErr: null,
+    firmwareText: '', firmwareErr: null, fwCopied: false,
     fontRows: [],
     busy: false,
     msg: null,
@@ -122,6 +123,12 @@ document.addEventListener('alpine:init', () => {
 
     setTab(t) {
       if (t === this.tab) return;
+      if (t === 'firmware') {
+        // Generated from the saved display + hardware; no config sync needed.
+        this.tab = t;
+        this.loadFirmware();
+        return;
+      }
       if (t === 'yaml') {
         this.applyForm();
         this.yamlText = dump(this.config);
@@ -132,6 +139,31 @@ document.addEventListener('alpine:init', () => {
       }
       this.tab = t;
       this.schedulePreview();
+    },
+
+    // ---- firmware (ESPHome YAML, read-only + copy) ----
+    async loadFirmware() {
+      this.firmwareText = ''; this.firmwareErr = null; this.fwCopied = false;
+      try {
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/firmware');
+        const text = await r.text();
+        if (!r.ok) {
+          try { this.firmwareErr = JSON.parse(text).error; } catch { this.firmwareErr = 'HTTP ' + r.status; }
+          return;
+        }
+        this.firmwareText = text;
+      } catch (e) { this.firmwareErr = 'Load failed: ' + e.message; }
+    },
+    async copyFirmware() {
+      if (!this.firmwareText) return;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(this.firmwareText);
+        } else {                       // http/ingress: clipboard API unavailable
+          const ta = this.$refs.fw; ta.select(); document.execCommand('copy');
+        }
+        this.fwCopied = true; setTimeout(() => { this.fwCopied = false; }, 1500);
+      } catch (e) { this.firmwareErr = 'Copy failed — select the text and copy manually.'; }
     },
 
     // ---- live preview of the current (unsaved) config ----

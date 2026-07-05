@@ -193,6 +193,7 @@
             <div class="tabs">
               <button class="tab" :class="tab==='form' && 'active'" @click="setTab('form')">Form</button>
               <button class="tab" :class="tab==='yaml' && 'active'" @click="setTab('yaml')">Advanced</button>
+              <button class="tab" :class="tab==='firmware' && 'active'" @click="setTab('firmware')">Firmware</button>
             </div>
 
             <!-- FORM -->
@@ -404,6 +405,17 @@
               </div>
               <textarea x-ref="yaml" x-model="yamlText" spellcheck="false" @input="edited()"></textarea>
               <div class="yamlerr" x-show="yamlErr" x-text="yamlErr"></div>
+            </div>
+
+            <!-- FIRMWARE -->
+            <div x-show="tab === 'firmware'">
+              <div class="row" style="margin-bottom:.5rem;align-items:center;gap:.5rem">
+                <button class="btn" @click="copyFirmware()" :disabled="!firmwareText" x-text="fwCopied ? 'Copied ✓' : 'Copy'"></button>
+                <span class="hint">ESPHome config for this display. Set <code>renderer_url</code> in the add-on
+                  Configuration tab, then paste this into a new ESPHome device.</span>
+              </div>
+              <div class="yamlerr" x-show="firmwareErr" x-text="firmwareErr"></div>
+              <textarea x-ref="fw" x-show="!firmwareErr" x-model="firmwareText" readonly spellcheck="false"></textarea>
             </div>
           </div>
 

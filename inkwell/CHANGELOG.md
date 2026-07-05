@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+- **ESPHome firmware generation.** `GET /api/displays/<name>/firmware` returns a ready-to-flash
+  `display-<name>.yaml` — wake from deep sleep, fetch the rendered PNG over HTTP, paint, sleep.
+  Wiring (board, SPI, pins, panel model, rotation, resize) comes from the hardware profile's
+  `esphome:` block; validated against the official `esphome config`.
+- New add-on option **`renderer_url`** — the host address ESP32 screens fetch from (e.g.
+  `http://192.168.0.139:5123`); one value per install, set once. Generated firmware uses it, or a
+  placeholder if left blank. Per-display refresh cadence via an optional `device: { sleep_duration }`
+  block in the display config.
+
 ## 0.9.3
 
 - **Helper lifecycle — inkwell as source of truth.** An ownership ledger (`/data/helpers.json`)

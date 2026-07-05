@@ -19,6 +19,7 @@ from pathlib import Path
 import jinja2
 from aiohttp import web
 
+import firmware
 import ha_ws
 import ledger
 import render
@@ -387,6 +388,24 @@ async def api_render_now(request: web.Request) -> web.Response:
         return web.json_response({"error": str(e)}, status=500)
 
 
+async def api_firmware(request: web.Request) -> web.Response:
+    """Generate the ESPHome YAML for a display, as a downloadable file."""
+    name = request.match_info["name"]
+    # renderer_url comes from the set-once add-on option; placeholder if unset.
+    renderer_url = (os.environ.get("RENDERER_URL") or "").strip() or None
+    try:
+        yaml_text = firmware.generate(name, renderer_url=renderer_url)
+    except FileNotFoundError as e:
+        return web.json_response({"error": str(e)}, status=404)
+    except firmware.FirmwareError as e:
+        return web.json_response({"error": str(e)}, status=422)
+    return web.Response(
+        text=yaml_text,
+        content_type="text/yaml",
+        headers={"Content-Disposition": f'attachment; filename="display-{name}.yaml"'},
+    )
+
+
 async def api_entities(request: web.Request) -> web.Response:
     try:
         return web.json_response({"entities": await ha_ws.fetch_entities()})
@@ -465,6 +484,7 @@ def create_ingress_app() -> web.Application:
     app.router.add_delete("/api/displays/{name}", api_delete_display)
     app.router.add_post("/api/displays/{name}/rename", api_rename_display)
     app.router.add_post("/api/displays/{name}/render", api_render_now)
+    app.router.add_get("/api/displays/{name}/firmware", api_firmware)
     app.router.add_post("/api/preview", api_preview)
     app.router.add_get("/api/preview/{name}.png", api_preview_png)
     app.router.add_get("/api/displays/{name}/helpers", api_helpers_status)

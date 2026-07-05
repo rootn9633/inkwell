@@ -1,5 +1,5 @@
 name: Inkwell
-version: "0.9.3"
+version: "0.10.0"
 slug: inkwell
 description: Server-side e-ink display renderer with a web UI
 url: https://github.com/rootn/inkwell
@@ -25,5 +25,9 @@ ports_description:
   "5123/tcp": E-ink image endpoint — ESP32 screens fetch PNG/BIN here (no auth)
 options:
   log_level: info
+  renderer_url: ""
 schema:
   log_level: list(debug|info|warning|error)?
+  # Base URL the ESP32 screens use to reach the image endpoint, e.g.
+  # http://192.168.0.139:5123. Leave blank to auto-detect the host's LAN IP.
+  renderer_url: str?
