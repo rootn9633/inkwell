@@ -409,6 +409,22 @@
 
             <!-- FIRMWARE -->
             <div x-show="tab === 'firmware'">
+              <div class="field" style="margin-bottom:.6rem">
+                <label>Keep-awake</label>
+                <template x-if="keepawake && !keepawake.exists">
+                  <div class="row" style="align-items:center;gap:.5rem">
+                    <button class="btn" @click="enableKeepawake()" :disabled="busy">Enable keep-awake toggle</button>
+                    <span class="hint">Creates an inkwell-owned switch to hold this screen awake for fast edits.</span>
+                  </div>
+                </template>
+                <template x-if="keepawake && keepawake.exists">
+                  <div class="row" style="align-items:center;gap:.6rem">
+                    <button class="btn" :class="keepawake.on && 'primary'" @click="toggleKeepawake()" :disabled="busy"
+                      x-text="'Keep-awake: ' + (keepawake.on ? 'ON' : 'OFF')"></button>
+                    <span class="hint">While ON the device polls ~15s and skips deep sleep — turn OFF when done editing.</span>
+                  </div>
+                </template>
+              </div>
               <div class="row" style="margin-bottom:.5rem;align-items:center;gap:.5rem">
                 <button class="btn" @click="copyFirmware()" :disabled="!firmwareText" x-text="fwCopied ? 'Copied ✓' : 'Copy'"></button>
                 <span class="hint">ESPHome config for this display. Set <code>renderer_url</code> in the add-on

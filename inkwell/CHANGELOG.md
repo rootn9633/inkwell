@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0
+
+- **Per-device keep-awake.** A tokenless `GET /devices/<id>/status` returns `{keep_awake}` from a
+  per-device inkwell-**owned** `input_boolean` (created/toggled from the editor's Firmware tab). The
+  helper is watched for state but never triggers a re-render, and is cleanup-safe (counts as
+  referenced). While on, the device skips deep sleep and refreshes on a short loop; off, it resumes
+  normal sleep.
+- **Firmware rework to the field-proven model.** Generated firmware now downloads the raw `.bin`
+  framebuffer via `esp_http_client` (no `online_image`/PNG decode), keeps a power bank alive with
+  ~20s wakes + an RTC `wake_count` throttle (real refresh every `refresh_interval`), forces a refresh
+  on a fresh boot (power-on/reset), and genuinely stays awake (`deep_sleep.prevent` + 30s loop) while
+  keep-awake is on. Timings overridable via a `device:` block; validated against `esphome config`.
+- **White-background (WYSIWYG) convention.** The bundled Waveshare profile renders white-on-black
+  (`bg_color: 255`), and firmware draws the framebuffer straight (no inversion), so the editor
+  preview matches the panel. `invert: true` on a hardware profile flips B/W if a future ESPHome
+  driver change swaps them.
+
 ## 0.10.0
 
 - **ESPHome firmware generation.** `GET /api/displays/<name>/firmware` returns a ready-to-flash

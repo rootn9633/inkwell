@@ -215,14 +215,32 @@ def _config_helper_targets(config: dict) -> dict:
 
 
 def _all_referenced_targets() -> set:
-    """Helper entity_ids referenced by any display (for orphan detection)."""
+    """Helper entity_ids inkwell is responsible for across all displays (for orphan
+    detection). Includes each display's per-device keep-awake toggle, which is owned
+    but never appears in the display config — so cleanup won't treat it as an orphan."""
     refs = set()
     for name in render.list_displays():
         try:
             refs |= set(_config_helper_targets(render.load_display_config(name)))
         except Exception:
             continue
+    refs |= keepawake_watched()
     return refs
+
+
+# ---- keep-awake (per-device) --------------------------------------------------
+# Device id == display name (1:1 until multi-device). The toggle is an inkwell-owned
+# input_boolean that gates the firmware's deep sleep; it never renders on the display.
+
+def keepawake_entity(device: str) -> str:
+    slug = device.replace("-", "_")
+    return f"input_boolean.inkwell_{slug}_keep_awake"
+
+
+def keepawake_watched() -> set:
+    """Keep-awake toggle entity_ids for every display — watched for state (so the
+    /devices/<id>/status endpoint can read them) but kept out of ENTITY_TO_DISPLAYS."""
+    return {keepawake_entity(n) for n in render.list_displays()}
 
 
 async def api_helpers_status(request: web.Request) -> web.Response:
@@ -406,6 +424,54 @@ async def api_firmware(request: web.Request) -> web.Response:
     )
 
 
+async def _keepawake_state(name: str) -> dict:
+    eid = keepawake_entity(name)
+    exists, on = False, False
+    try:
+        for e in await ha_ws.fetch_entities():
+            if e["entity_id"] == eid:
+                exists, on = True, e["state"] == "on"
+                break
+    except Exception as ex:
+        log.warning("keepawake state fetch failed: %s", ex)
+    return {"entity_id": eid, "exists": exists, "owned": ledger.owns(eid), "on": on}
+
+
+async def api_keepawake(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    if not render.display_path(name).exists():
+        return web.json_response({"error": "Not found"}, status=404)
+    return web.json_response(await _keepawake_state(name))
+
+
+async def api_keepawake_enable(request: web.Request) -> web.Response:
+    """Create the display's inkwell-owned keep-awake toggle (idempotent)."""
+    name = request.match_info["name"]
+    if not render.display_path(name).exists():
+        return web.json_response({"error": "Not found"}, status=404)
+    st = await _keepawake_state(name)
+    if not st["exists"]:
+        try:
+            await ha_ws.create_helper(st["entity_id"])   # input_boolean
+            ledger.add(st["entity_id"], "input_boolean")
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=502)
+        await _reindex_and_prime()   # start watching it
+    return web.json_response(await _keepawake_state(name))
+
+
+async def api_keepawake_toggle(request: web.Request) -> web.Response:
+    name = request.match_info["name"]
+    st = await _keepawake_state(name)
+    if not st["exists"]:
+        return web.json_response({"error": "keep-awake not enabled"}, status=409)
+    try:
+        await ha_ws.call_service("input_boolean", "toggle", st["entity_id"])
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=502)
+    return web.json_response(await _keepawake_state(name))
+
+
 async def api_entities(request: web.Request) -> web.Response:
     try:
         return web.json_response({"entities": await ha_ws.fetch_entities()})
@@ -485,6 +551,9 @@ def create_ingress_app() -> web.Application:
     app.router.add_post("/api/displays/{name}/rename", api_rename_display)
     app.router.add_post("/api/displays/{name}/render", api_render_now)
     app.router.add_get("/api/displays/{name}/firmware", api_firmware)
+    app.router.add_get("/api/displays/{name}/keepawake", api_keepawake)
+    app.router.add_post("/api/displays/{name}/keepawake/enable", api_keepawake_enable)
+    app.router.add_post("/api/displays/{name}/keepawake/toggle", api_keepawake_toggle)
     app.router.add_post("/api/preview", api_preview)
     app.router.add_get("/api/preview/{name}.png", api_preview_png)
     app.router.add_get("/api/displays/{name}/helpers", api_helpers_status)
@@ -559,8 +628,18 @@ def create_image_app() -> web.Application:
     app.router.add_get("/displays", list_displays)
     app.router.add_get("/displays/{name}.png", display_png)
     app.router.add_get("/displays/{name}.bin", display_bin)
+    app.router.add_get("/devices/{id}/status", device_status)
     app.router.add_post("/render/{name}", render_endpoint)
     return app
+
+
+async def device_status(request: web.Request) -> web.Response:
+    """Per-device directives the ESP32 fetches each wake (tokenless, plain HTTP).
+    Currently just keep_awake, from the device's inkwell-owned toggle; shape grows."""
+    device = request.match_info["id"]
+    keep_awake = STATES.get(keepawake_entity(device)) == "on"
+    log.info("device %s polled status: keep_awake=%s", device, keep_awake)
+    return web.json_response({"keep_awake": keep_awake})
 
 
 # ---------------------------------------------------------------- state sync
@@ -604,7 +683,9 @@ def build_index() -> set[str]:
             continue
         for entity in ha_ws.extract_entities(cfg):
             ENTITY_TO_DISPLAYS.setdefault(entity, set()).add(name)
-    return set(ENTITY_TO_DISPLAYS)
+    # Watch keep-awake toggles for STATES, but not in ENTITY_TO_DISPLAYS — toggling
+    # one gates the device's sleep, it must not trigger a display re-render.
+    return set(ENTITY_TO_DISPLAYS) | keepawake_watched()
 
 
 async def _render_pending() -> None:

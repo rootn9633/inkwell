@@ -19,6 +19,7 @@ document.addEventListener('alpine:init', () => {
     yamlText: '',
     yamlErr: null,
     firmwareText: '', firmwareErr: null, fwCopied: false,
+    keepawake: null,
     fontRows: [],
     busy: false,
     msg: null,
@@ -127,6 +128,7 @@ document.addEventListener('alpine:init', () => {
         // Generated from the saved display + hardware; no config sync needed.
         this.tab = t;
         this.loadFirmware();
+        this.loadKeepawake();
         return;
       }
       if (t === 'yaml') {
@@ -164,6 +166,36 @@ document.addEventListener('alpine:init', () => {
         }
         this.fwCopied = true; setTimeout(() => { this.fwCopied = false; }, 1500);
       } catch (e) { this.firmwareErr = 'Copy failed — select the text and copy manually.'; }
+    },
+
+    // ---- keep-awake toggle (per device) ----
+    async loadKeepawake() {
+      this.keepawake = null;
+      try {
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/keepawake');
+        if (r.ok) this.keepawake = await r.json();
+      } catch (e) { /* leave null; section just hides */ }
+    },
+    async enableKeepawake() {
+      this.busy = true; this.msg = null;
+      try {
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/keepawake/enable', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        this.keepawake = d;
+        this.msg = { ok: true, text: 'Keep-awake toggle created.' };
+      } catch (e) { this.msg = { ok: false, text: 'Enable failed: ' + e.message }; }
+      finally { this.busy = false; }
+    },
+    async toggleKeepawake() {
+      this.busy = true; this.msg = null;
+      try {
+        const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/keepawake/toggle', { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        this.keepawake = d;
+      } catch (e) { this.msg = { ok: false, text: 'Toggle failed: ' + e.message }; }
+      finally { this.busy = false; }
     },
 
     // ---- live preview of the current (unsaved) config ----

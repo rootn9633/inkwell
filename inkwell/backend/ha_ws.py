@@ -71,6 +71,14 @@ async def ws_command(payload: dict, timeout: float = 10.0):
                     return msg.get("result")
 
 
+async def call_service(domain: str, service: str, entity_id: str):
+    """Invoke a HA service on one entity over the websocket (e.g. input_boolean/toggle)."""
+    return await ws_command({
+        "type": "call_service", "domain": domain, "service": service,
+        "target": {"entity_id": entity_id},
+    })
+
+
 async def create_helper(entity_id: str, options=None):
     """Create a storage-backed helper so its entity_id becomes `entity_id`.
 
