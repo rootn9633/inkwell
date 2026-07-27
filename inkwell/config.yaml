@@ -1,8 +1,8 @@
 name: Inkwell
-version: "0.12.0"
+version: "0.12.1"
 slug: inkwell
 description: Server-side e-ink display renderer with a web UI
-url: https://github.com/rootn/inkwell
+url: https://github.com/rootn9633/inkwell
 arch:
   - aarch64
   - amd64

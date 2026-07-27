@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.1
+
+- Fix: a fresh boot (power-on / reset / flash) now forces a repaint — a firmware update that
+  changes rendering with no content change no longer leaves a stale image on the panel.
+- Fix: `clean up unused` / `unused-helpers` now refuse (409) instead of deleting when any display
+  config fails to load, so a transiently-unparseable display can't have its helpers deleted as
+  false orphans.
+- Fix: correct the add-on repository URL (`rootn9633/inkwell`).
+
 ## 0.12.0
 
 - **Change detection — skip needless refreshes.** `GET /devices/<id>/status` now returns `rev`, a

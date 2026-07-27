@@ -217,13 +217,14 @@ def _config_helper_targets(config: dict) -> dict:
 def _all_referenced_targets() -> set:
     """Helper entity_ids inkwell is responsible for across all displays (for orphan
     detection). Includes each display's per-device keep-awake toggle, which is owned
-    but never appears in the display config — so cleanup won't treat it as an orphan."""
+    but never appears in the display config — so cleanup won't treat it as an orphan.
+
+    Raises if any display config can't be read: a display we can't parse might still
+    reference a helper, so callers must refuse to treat helpers as orphaned rather than
+    risk deleting a referenced one."""
     refs = set()
     for name in render.list_displays():
-        try:
-            refs |= set(_config_helper_targets(render.load_display_config(name)))
-        except Exception:
-            continue
+        refs |= set(_config_helper_targets(render.load_display_config(name)))
     refs |= keepawake_watched()
     return refs
 
@@ -373,13 +374,23 @@ async def api_adopt_helpers(request: web.Request) -> web.Response:
 
 
 async def api_unused_helpers(request: web.Request) -> web.Response:
-    referenced = _all_referenced_targets()
+    try:
+        referenced = _all_referenced_targets()
+    except Exception as e:
+        return web.json_response(
+            {"error": f"a display config failed to load: {e}", "unused": []}, status=409)
     unused = [eid for eid in sorted(ledger.load()) if eid not in referenced]
     return web.json_response({"unused": unused})
 
 
 async def api_cleanup_helpers(request: web.Request) -> web.Response:
-    referenced = _all_referenced_targets()
+    try:
+        referenced = _all_referenced_targets()
+    except Exception as e:
+        # A display we can't parse might reference a helper — refuse to delete anything.
+        return web.json_response(
+            {"error": f"a display config failed to load; refusing to clean up: {e}",
+             "deleted": []}, status=409)
     deleted, errors = [], []
     for eid in sorted(ledger.load()):
         if eid in referenced:

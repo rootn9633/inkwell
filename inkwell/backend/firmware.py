@@ -231,9 +231,11 @@ script:
     mode: single
     then:
       - lambda: |-
-          // Fresh boot (power-on / reset / flash) — refresh now, don't wait out the RTC counter.
+          // Fresh boot (power-on / reset / flash) — refresh now, don't wait out the RTC counter,
+          // and force a repaint (a firmware change can alter rendering with no content change).
           if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_TIMER) {
             id(wake_count) = @@refresh_target@@;
+            id(last_painted) = 0;
           }
           id(wake_count) += 1;
           ESP_LOGI("main", "Wake %d / %d (keep_awake=%d)", id(wake_count), @@refresh_target@@, id(keep_awake));
