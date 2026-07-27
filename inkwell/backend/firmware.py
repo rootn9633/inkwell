@@ -127,6 +127,16 @@ globals:
     type: bool
     restore_value: true
     initial_value: 'false'
+  # Change detection: skip the image download + e-ink refresh when the content
+  # revision (from the status endpoint) matches what we last painted.
+  - id: srv_rev
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: last_painted
+    type: uint32_t
+    restore_value: true
+    initial_value: '0'
 
 display:
   - platform: @@platform@@
@@ -152,7 +162,8 @@ display:
       }
 
 script:
-  # One refresh: poll keep-awake, download the framebuffer over HTTP, paint it.
+  # One refresh: poll status, and only download + repaint if the content revision
+  # changed since we last painted (skips needless e-ink refreshes / downloads).
   - id: refresh_once
     mode: single
     then:
@@ -163,48 +174,58 @@ script:
             - lambda: |-
                 json::parse_json(body, [](JsonObject root) -> bool {
                   id(keep_awake) = root["keep_awake"] | false;
+                  id(srv_rev) = root["rev"] | 0u;
                   return true;
                 });
-      - logger.log: "Downloading framebuffer..."
-      - lambda: |-
-          std::string url = std::string("${renderer_url}/displays/${display_name}.bin?t=") +
-                            std::to_string(millis());
-          esp_http_client_config_t config = {};
-          config.url = url.c_str();
-          config.timeout_ms = 15000;
-          config.user_agent = "ESPHome-Display";
-          auto *client = esp_http_client_init(&config);
-          id(download_ok) = false;
-          if (client == nullptr) {
-            ESP_LOGE("main", "HTTP client init failed (heap: %d)", esp_get_free_heap_size());
-          } else if (esp_http_client_open(client, 0) == ESP_OK) {
-            esp_http_client_fetch_headers(client);
-            int total = 0, chunk;
-            while (total < @@bufsize@@) {
-              int to_read = @@bufsize@@ - total;
-              if (to_read > 4096) to_read = 4096;
-              chunk = esp_http_client_read(client,
-                  (char *)(id(image_data).data() + total), to_read);
-              if (chunk <= 0) break;
-              total += chunk;
-            }
-            esp_http_client_close(client);
-            if (total == @@bufsize@@) {
-              id(download_ok) = true;
-            } else {
-              ESP_LOGE("main", "Short read: %d / @@bufsize@@ bytes", total);
-            }
-          } else {
-            ESP_LOGE("main", "HTTP open failed");
-          }
-          if (client) esp_http_client_cleanup(client);
       - if:
           condition:
-            lambda: 'return id(download_ok);'
+            lambda: 'return id(srv_rev) != id(last_painted);'
           then:
-            - component.update: eink_display
+            - logger.log:
+                format: "Content changed (rev %u -> %u), downloading..."
+                args: ['id(last_painted)', 'id(srv_rev)']
+            - lambda: |-
+                std::string url = std::string("${renderer_url}/displays/${display_name}.bin?t=") +
+                                  std::to_string(millis());
+                esp_http_client_config_t config = {};
+                config.url = url.c_str();
+                config.timeout_ms = 15000;
+                config.user_agent = "ESPHome-Display";
+                auto *client = esp_http_client_init(&config);
+                id(download_ok) = false;
+                if (client == nullptr) {
+                  ESP_LOGE("main", "HTTP client init failed (heap: %d)", esp_get_free_heap_size());
+                } else if (esp_http_client_open(client, 0) == ESP_OK) {
+                  esp_http_client_fetch_headers(client);
+                  int total = 0, chunk;
+                  while (total < @@bufsize@@) {
+                    int to_read = @@bufsize@@ - total;
+                    if (to_read > 4096) to_read = 4096;
+                    chunk = esp_http_client_read(client,
+                        (char *)(id(image_data).data() + total), to_read);
+                    if (chunk <= 0) break;
+                    total += chunk;
+                  }
+                  esp_http_client_close(client);
+                  if (total == @@bufsize@@) {
+                    id(download_ok) = true;
+                  } else {
+                    ESP_LOGE("main", "Short read: %d / @@bufsize@@ bytes", total);
+                  }
+                } else {
+                  ESP_LOGE("main", "HTTP open failed");
+                }
+                if (client) esp_http_client_cleanup(client);
+            - if:
+                condition:
+                  lambda: 'return id(download_ok);'
+                then:
+                  - component.update: eink_display
+                  - lambda: 'id(last_painted) = id(srv_rev);'
+                else:
+                  - logger.log: "Download failed — will retry next cycle"
           else:
-            - logger.log: "Download failed"
+            - logger.log: "No content change — skipping download + refresh"
 
   - id: main_cycle
     mode: single

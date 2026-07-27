@@ -633,13 +633,26 @@ def create_image_app() -> web.Application:
     return app
 
 
+def _display_rev(name: str) -> int:
+    """Compact content revision from the render hash (md5 of the framebuffer, written
+    by render_display only when content changes). First 8 hex chars → 32-bit value the
+    device holds in a uint32_t and compares, to skip the download + e-ink refresh when
+    unchanged."""
+    hash_path = render.OUTPUT_DIR / f"{name}.hash"
+    try:
+        return int(hash_path.read_text().strip()[:8], 16)
+    except Exception:
+        return 0
+
+
 async def device_status(request: web.Request) -> web.Response:
-    """Per-device directives the ESP32 fetches each wake (tokenless, plain HTTP).
-    Currently just keep_awake, from the device's inkwell-owned toggle; shape grows."""
+    """Per-device directives the ESP32 fetches each wake (tokenless, plain HTTP):
+    keep_awake (from the device's inkwell-owned toggle) + rev (content revision)."""
     device = request.match_info["id"]
     keep_awake = STATES.get(keepawake_entity(device)) == "on"
-    log.info("device %s polled status: keep_awake=%s", device, keep_awake)
-    return web.json_response({"keep_awake": keep_awake})
+    rev = _display_rev(device)
+    log.info("device %s polled status: keep_awake=%s rev=%s", device, keep_awake, rev)
+    return web.json_response({"keep_awake": keep_awake, "rev": rev})
 
 
 # ---------------------------------------------------------------- state sync

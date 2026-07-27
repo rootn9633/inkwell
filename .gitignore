@@ -1,3 +1,7 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Runtime artefacts — rendered PNGs are not source
 eink-renderer/output/
 

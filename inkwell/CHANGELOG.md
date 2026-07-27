@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- **Change detection — skip needless refreshes.** `GET /devices/<id>/status` now returns `rev`, a
+  32-bit content revision derived from the render hash (updated only when the framebuffer actually
+  changes). The firmware holds the last-painted rev in RTC and **downloads + repaints only when it
+  changes** — so keep-awake mode no longer flashes the e-ink every cycle, and a normal wake with no
+  changes skips the framebuffer download and the panel refresh entirely (less power, longer panel life).
+
 ## 0.11.0
 
 - **Per-device keep-awake.** A tokenless `GET /devices/<id>/status` returns `{keep_awake}` from a
