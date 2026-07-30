@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.2
+
+- Bake a default CJK font (LXGW WenKai Screen, OFL) into the image at build time, so a fresh
+  install renders the seeded template out of the box. User-uploaded fonts in `/config/fonts`
+  still take precedence.
+
 ## 0.12.1
 
 - Fix: a fresh boot (power-on / reset / flash) now forces a repaint — a firmware update that

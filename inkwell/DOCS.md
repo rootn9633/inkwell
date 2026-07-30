@@ -45,9 +45,16 @@ under the `fonts/` subfolder:
   files in there.
 - A later release adds font upload directly from the web UI, writing to the same folder.
 
-Nothing is bundled, so provide at least one font before rendering a display that uses it
-(e.g. `LXGWWenKaiScreen.ttf` for the sample `tea_menu`). Until a referenced font is present,
-that display logs a warning and its image endpoint returns `404`.
+The default **LXGW WenKai Screen** font (`LXGWWenKaiScreen.ttf`) is bundled, so the sample
+`tea_menu` renders out of the box; fonts you upload to the config folder take precedence.
+If a display references a font that isn't present, it logs a warning and its image endpoint
+returns `404` until you provide that font.
+
+### Font licensing
+
+The bundled **LXGW WenKai Screen** is © LXGW and The Klee Project Authors, under the
+[SIL Open Font License 1.1](https://scripts.sil.org/OFL) — its `OFL.txt` ships alongside the
+font in the image. Fonts you upload remain under their own licenses.
 
 ## Ports
 

@@ -21,4 +21,14 @@ RUN mkdir -p /app/frontend/static \
  && curl -fsSL "https://cdn.jsdelivr.net/npm/js-yaml@${JS_YAML_VERSION}/dist/js-yaml.min.js" \
       -o /app/frontend/static/js-yaml.min.js
 
+# Default CJK font baked into the image so a fresh install renders the seeded template
+# out of the box (LXGW WenKai Screen, OFL-1.1). User-uploaded fonts in /config/fonts win.
+# OFL requires the license + copyright to travel with the font, so ship OFL.txt alongside it.
+ARG LXGW_VERSION=v1.522
+RUN mkdir -p /app/backend/defaults/fonts \
+ && curl -fsSL "https://github.com/lxgw/LxgwWenKai-Screen/releases/download/${LXGW_VERSION}/LXGWWenKaiScreen.ttf" \
+      -o /app/backend/defaults/fonts/LXGWWenKaiScreen.ttf \
+ && curl -fsSL "https://raw.githubusercontent.com/lxgw/LxgwWenKai-Screen/${LXGW_VERSION}/OFL.txt" \
+      -o /app/backend/defaults/fonts/LXGWWenKaiScreen.OFL.txt
+
 CMD [ "/run.sh" ]

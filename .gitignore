@@ -17,6 +17,7 @@ esphome/.esphome/
 
 # Vendored assets — fetched at Docker build time, not committed
 inkwell/frontend/static/*.min.js
+inkwell/backend/defaults/fonts/
 
 # Local-only dev helper (machine-specific HA host)
 scripts/sync-to-ha.sh
