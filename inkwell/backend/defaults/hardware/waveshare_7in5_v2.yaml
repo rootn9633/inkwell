@@ -1,0 +1,14 @@
+name: "Waveshare 7.5\" V2"
+width: 800
+height: 480
+color_mode: "1"   # 1-bit black/white (Pillow mode "1")
+bg_color: 255     # white background (Pillow mode "1": 255 = white)
+fg_color: 0       # black ink — WYSIWYG: preview and panel both white-on-black text
+# Wiring metadata — used only for ESPHome firmware generation, ignored by the renderer.
+esphome:
+  model: "7.50in-bV2"
+  rotation: "180°"
+  # invert: true   # set only if black/white come out swapped on the panel
+  board: esp32dev
+  spi: { clk_pin: GPIO13, mosi_pin: GPIO14 }
+  pins: { cs: GPIO15, dc: GPIO27, busy: GPIO25, reset: GPIO26 }

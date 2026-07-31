@@ -1,0 +1,33 @@
+name: Inkwell
+version: "0.12.2"
+slug: inkwell
+description: Server-side e-ink display renderer with a web UI
+url: https://github.com/rootn9633/inkwell
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:image-frame
+panel_title: Inkwell
+homeassistant_api: true
+# User-editable config (displays, hardware, fonts). On HAOS this is the
+# addon_configs/<slug> share — drop fonts into its fonts/ folder; the UI writes here too.
+map:
+  - addon_config:rw
+# Raw port for the e-ink image endpoint (ESP32 fetch, no auth). Nothing listens
+# on it until Phase 2 — declared now so the manifest is stable across phases.
+ports:
+  "5123/tcp": 5123
+ports_description:
+  "5123/tcp": E-ink image endpoint — ESP32 screens fetch PNG/BIN here (no auth)
+options:
+  log_level: info
+  renderer_url: ""
+schema:
+  log_level: list(debug|info|warning|error)?
+  # Base URL the ESP32 screens use to reach the image endpoint, e.g.
+  # http://192.168.0.139:5123. Leave blank to auto-detect the host's LAN IP.
+  renderer_url: str?

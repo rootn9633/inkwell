@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inkwell</title>
+  <script defer src="{{ base }}/static/js-yaml.min.js"></script>
+  <script defer src="{{ base }}/static/app.js"></script>
+  <script defer src="{{ base }}/static/alpine.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; --fg:#1a1a1a; --muted:#6b7280; --line:#d1d5db;
+            --accent:#2563eb; --card:#fff; --bg:#f5f6f8; --danger:#dc2626; --ok:#16a34a; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg:#e5e7eb; --muted:#9ca3af; --line:#374151; --accent:#60a5fa;
+              --card:#1f2224; --bg:#17191b; --danger:#f87171; --ok:#4ade80; }
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin:0; background:var(--bg); color:var(--fg); }
+    header { padding:.9rem 1.25rem; border-bottom:1px solid var(--line); display:flex;
+             align-items:center; gap:.6rem; }
+    header h1 { font-size:1.1rem; margin:0; }
+    header .sub { color:var(--muted); font-size:.85rem; }
+    .spacer { flex:1; }
+    .content { padding:1rem 1.25rem; }
+    .btn { font:inherit; padding:.4rem .7rem; border:1px solid var(--line); border-radius:.45rem;
+           background:var(--card); color:inherit; cursor:pointer; }
+    .btn:hover { border-color:var(--accent); }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .btn.danger { color:var(--danger); border-color:var(--danger); }
+    .btn:disabled { opacity:.5; cursor:default; }
+    .muted { color:var(--muted); }
+    .err { color:var(--danger); padding:1.5rem; }
+    .empty { color:var(--muted); padding:2rem; text-align:center; }
+
+    /* list */
+    .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:1rem; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:.6rem; overflow:hidden; }
+    .card img { width:100%; display:block; background:#000; cursor:pointer; border-bottom:1px solid var(--line); }
+    .card .body { padding:.6rem .75rem; display:flex; align-items:center; gap:.5rem; }
+    .card .name { font-weight:600; }
+    .card .meta { color:var(--muted); font-size:.8rem; }
+
+    /* editor */
+    .toolbar { display:flex; align-items:center; gap:.5rem; padding:.75rem 1.25rem;
+               border-bottom:1px solid var(--line); flex-wrap:wrap; }
+    .toolbar .name { font-weight:600; }
+    .grid2 { display:grid; grid-template-columns:1fr 380px; gap:1rem; padding:1rem 1.25rem; align-items:start; }
+    @media (max-width:820px) { .grid2 { grid-template-columns:1fr; } }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:.6rem; padding:1rem; }
+    .tabs { display:flex; gap:.25rem; margin-bottom:1rem; }
+    .tab { padding:.35rem .8rem; border:1px solid var(--line); border-radius:.45rem; cursor:pointer;
+           background:transparent; color:inherit; font:inherit; }
+    .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .field { margin-bottom:.9rem; display:flex; flex-direction:column; gap:.3rem; }
+    .field label { font-size:.8rem; color:var(--muted); }
+    select, input[type=text], input[type=number], textarea {
+      font:inherit; padding:.4rem .5rem; border:1px solid var(--line); border-radius:.4rem;
+      background:var(--bg); color:inherit; }
+    textarea { width:100%; min-height:420px; font-family:ui-monospace, Menlo, Consolas, monospace;
+               font-size:.85rem; white-space:pre; }
+    table.fonts { width:100%; border-collapse:collapse; font-size:.85rem; }
+    table.fonts th { text-align:left; color:var(--muted); font-weight:500; padding:.25rem .4rem; }
+    table.fonts td { padding:.2rem .4rem; }
+    table.fonts input[type=text] { width:100%; }
+    table.fonts input[type=number] { width:5rem; }
+    .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .hint { font-size:.8rem; color:var(--muted); margin-top:.5rem; }
+    .preview img { width:100%; height:auto; display:block; border:1px solid var(--line);
+                   border-radius:.35rem; background:#000; }
+    .msg { font-size:.85rem; }
+    .msg.ok { color:var(--ok); } .msg.err { color:var(--danger); }
+    .unsaved { color:#f59e0b; font-size:.85rem; font-weight:500; }
+    .badge { font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; padding:.05rem .4rem;
+             border:1px solid var(--line); border-radius:.35rem; color:var(--muted); }
+    .section { border:1px solid var(--line); border-radius:.5rem; padding:.6rem; margin-bottom:.6rem; background:var(--bg); }
+    .section-head { display:flex; align-items:center; gap:.4rem; margin-bottom:.5rem; }
+    .section .hdr { width:100%; margin-bottom:.5rem; }
+    .cond { display:flex; flex-direction:column; gap:.4rem; margin-bottom:.5rem; }
+    .chk { display:flex; align-items:center; gap:.4rem; color:var(--muted); font-size:.85rem; }
+    .reqall { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; }
+    .lbl { color:var(--muted); font-size:.82rem; }
+    .items { display:flex; flex-direction:column; gap:.35rem; }
+    .irow { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
+    .irow input[type=text] { flex:1; min-width:7rem; }
+    .irow .ent { font-family:ui-monospace, monospace; font-size:.82rem; }
+    .item-row { padding:.22rem .45rem; border-radius:.45rem; background:rgba(127,127,127,.05); }
+    .item-row:hover { background:rgba(127,127,127,.12); }
+    .btn.xs { padding:.2rem .45rem; font-size:.8rem; }
+    .chip .x { background:none; border:none; color:var(--muted); cursor:pointer; margin-left:.3rem; padding:0; font-size:.8rem; }
+    .adv { color:var(--muted); font-size:.83rem; display:flex; align-items:center; gap:.4rem; }
+    .banner { background:rgba(224,165,59,.12); border:1px solid rgba(224,165,59,.4); color:#e0a53b;
+              padding:.5rem .7rem; border-radius:.5rem; font-size:.85rem; margin-bottom:.9rem; }
+    .oset { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; padding:.35rem 0; border-bottom:1px solid var(--line); }
+    .oname { font-family:ui-monospace,monospace; font-size:.82rem; width:6rem; flex:0 0 auto; }
+    .ochips { display:flex; gap:.35rem; flex-wrap:wrap; flex:1; min-width:8rem; align-items:center; }
+    .ochip { display:inline-flex; align-items:center; gap:.15rem; font-size:.8rem; background:var(--bg);
+             border:1px solid var(--line); border-radius:.45rem; padding:.18rem .2rem .18rem .55rem; }
+    .ochip .x { background:none; border:0; color:var(--muted); cursor:pointer; font-size:.72rem; line-height:1;
+                padding:.1rem .3rem; border-radius:.3rem; }
+    .ochip .x:hover { color:var(--danger); background:rgba(127,127,127,.16); }
+    .second { display:inline-flex; align-items:center; gap:.1rem; font-size:.72rem; background:rgba(53,196,166,.18);
+              border-radius:.3rem; padding:.05rem .1rem .05rem .4rem; }
+    .second .x { background:none; border:0; color:inherit; opacity:.55; cursor:pointer; font-size:.68rem; padding:0 .2rem; }
+    .secondadd { font-size:.68rem; color:var(--muted); background:transparent; border:1px dashed rgba(53,196,166,.45);
+                 border-radius:.3rem; cursor:pointer; padding:.05rem .35rem; }
+    .oadd { width:6rem !important; min-width:0 !important; font-size:.8rem; }
+    .lgrid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+    .lf-l { display:flex; flex-direction:column; gap:.2rem; font-size:.75rem; color:var(--muted); }
+    .lf-l input { width:100%; }
+    .rtag { font-size:.72rem; font-weight:600; border-radius:.35rem; padding:.12rem .4rem; flex:0 0 auto; color:#35c4a6; border:1px solid var(--line); }
+    .when { display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; flex:1; }
+    .wlbl { color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; flex:0 0 auto; }
+    .wc { display:inline-flex; align-items:center; gap:.35rem; font-size:.78rem; font-family:ui-monospace,monospace;
+          border-radius:.4rem; padding:.1rem .2rem .1rem .45rem; color:#35c4a6;
+          background:rgba(53,196,166,.12); border:1px solid rgba(53,196,166,.38); }
+    .wc .cst { font-family:system-ui; font-size:.62rem; font-weight:700; padding:0 .3rem; border-radius:1rem; background:rgba(53,196,166,.22); }
+    .wc.off .cst { color:var(--muted); background:rgba(127,127,127,.18); }
+    .wc .x { background:none; border:0; color:inherit; opacity:.6; cursor:pointer; font-size:.75rem; padding:0 .2rem; }
+    .wc.add { color:var(--muted); background:transparent; border:1px dashed var(--line); cursor:pointer; font-family:system-ui; padding:.1rem .4rem; }
+    .wc.always { color:var(--muted); background:transparent; border:0; font-style:italic; font-family:system-ui; }
+    .helper-row { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-top:1px solid var(--line); }
+    .helper-row .hid { font-family:ui-monospace,monospace; font-size:.78rem; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hstat { font-size:.75rem; flex:0 0 auto; } .hstat.ok { color:#16a34a; } .hstat.missing { color:#e0a53b; } .hstat.ext { color:var(--muted); }
+    .yamlerr { color:var(--danger); font-size:.82rem; margin-top:.4rem; white-space:pre-wrap; }
+
+    /* modal */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex;
+               align-items:center; justify-content:center; padding:1rem; z-index:50; }
+    .modal { background:var(--card); border:1px solid var(--line); border-radius:.6rem;
+             width:min(560px,100%); max-height:80vh; display:flex; flex-direction:column; }
+    .modal .head { padding:.75rem 1rem; border-bottom:1px solid var(--line); display:flex; gap:.5rem; }
+    .modal .head input { flex:1; }
+    .modal .list { overflow:auto; }
+    .ent { display:flex; gap:.5rem; align-items:baseline; padding:.4rem 1rem; cursor:pointer;
+           border-bottom:1px solid var(--line); }
+    .ent:hover { background:var(--bg); }
+    .ent .id { font-family:ui-monospace, monospace; font-size:.82rem; }
+    .ent .nm { color:var(--muted); font-size:.8rem; }
+    .ent .st { margin-left:auto; color:var(--muted); font-size:.78rem; }
+  </style>
+</head>
+<body>
+  <div x-data="inkwell('{{ base }}')" x-init="init()">
+
+    <!-- ============ LIST ============ -->
+    <template x-if="view === 'list'">
+      <div>
+        <header>
+          <h1>Inkwell</h1>
+          <span class="sub" x-text="displays.length + ' display' + (displays.length===1?'':'s')"></span>
+          <span class="spacer"></span>
+          <button class="btn primary" @click="createDisplay()">+ New display</button>
+        </header>
+        <div class="content">
+          <div class="err" x-show="err" x-text="err"></div>
+          <div class="empty" x-show="!err && displays.length === 0">No displays yet — create one.</div>
+          <div class="cards" x-show="displays.length">
+            <template x-for="d in displays" :key="d.name">
+              <div class="card">
+                <template x-if="d.has_image"><img :src="listImg(d.name)" @click="openEditor(d.name)" :alt="d.name"></template>
+                <div class="body">
+                  <div>
+                    <div class="name" x-text="d.name"></div>
+                    <div class="meta" x-text="d.hardware + ' · ' + d.renderer"></div>
+                  </div>
+                  <span class="spacer"></span>
+                  <button class="btn" @click="openEditor(d.name)">Edit</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============ EDITOR ============ -->
+    <template x-if="view === 'edit'">
+      <div>
+        <div class="toolbar">
+          <button class="btn" @click="backToList()">← Back</button>
+          <span class="name" x-text="name"></span>
+          <button class="btn" @click="renameDisplay()">Rename</button>
+          <button class="btn danger" @click="deleteDisplay()">Delete</button>
+          <span class="spacer"></span>
+          <span class="unsaved" x-show="dirty">● Unsaved changes</span>
+          <span class="msg" :class="msg && (msg.ok?'ok':'err')" x-text="msg ? msg.text : ''"></span>
+          <button class="btn" @click="renderNow()" :disabled="busy">Render now</button>
+          <button class="btn primary" @click="save()" :disabled="busy || !dirty">Save</button>
+        </div>
+
+        <div class="grid2">
+          <div class="panel">
+            <div class="tabs">
+              <button class="tab" :class="tab==='form' && 'active'" @click="setTab('form')">Form</button>
+              <button class="tab" :class="tab==='yaml' && 'active'" @click="setTab('yaml')">Advanced</button>
+              <button class="tab" :class="tab==='firmware' && 'active'" @click="setTab('firmware')">Firmware</button>
+            </div>
+
+            <!-- FORM -->
+            <div x-show="tab === 'form'">
+              <div class="field">
+                <label>Hardware</label>
+                <select @change="config.hardware = $event.target.value; edited()">
+                  <template x-for="h in hardware" :key="h">
+                    <option :value="h" :selected="h === config.hardware" x-text="h"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="field">
+                <label>Renderer</label>
+                <select @change="config.renderer = $event.target.value; edited()">
+                  <template x-for="r in renderers" :key="r">
+                    <option :value="r" :selected="r === config.renderer" x-text="r"></option>
+                  </template>
+                </select>
+              </div>
+              <template x-if="isMenu() && config.title">
+                <div class="field">
+                  <label>Title text (vertical, left)</label>
+                  <input type="text" x-model="config.title.text" @input="edited()">
+                </div>
+              </template>
+              <template x-if="isDashboard()">
+                <div class="field">
+                  <label>Dashboard title</label>
+                  <input type="text" x-model="config.dashboard_title" @input="edited()">
+                </div>
+              </template>
+
+              <template x-if="isLegacyMenu()">
+                <div class="banner">This menu uses the old format.
+                  <button class="btn xs" @click="convertLegacy()" style="margin-left:.4rem">Convert to new format</button>
+                  <span class="lbl" style="margin-left:.3rem">or edit it in the Advanced tab.</span>
+                </div>
+              </template>
+
+              <!-- OPTION SETS -->
+              <template x-if="isMenu() && config.option_sets">
+                <div class="field">
+                  <label>Option sets <span class="lbl">— shared choice lists</span></label>
+                  <template x-for="(opts, sname) in config.option_sets" :key="sname">
+                    <div class="oset">
+                      <input type="text" class="oname" :value="sname" @change="renameOptionSet(sname, $event)">
+                      <div class="ochips">
+                        <template x-for="(o, oi) in opts" :key="oi">
+                          <span class="ochip"><span x-text="o"></span><button class="x" @click="removeOption(sname, oi)">✕</button></span>
+                        </template>
+                        <input type="text" class="oadd" placeholder="+ option" @change="addOption(sname, $event)">
+                      </div>
+                      <span class="lbl" x-text="'used by ' + optionSetUsage(sname)"></span>
+                      <button class="btn xs danger" @click="removeOptionSet(sname)">✕</button>
+                    </div>
+                  </template>
+                  <button class="btn xs" @click="addOptionSet()" style="margin-top:.45rem">+ New set</button>
+                </div>
+              </template>
+
+              <div class="field">
+                <label>Fonts</label>
+                <table class="fonts">
+                  <thead><tr><th>Name</th><th>File</th><th>Size</th><th></th></tr></thead>
+                  <tbody>
+                    <template x-for="(row, i) in fontRows" :key="i">
+                      <tr>
+                        <td><input type="text" x-model="row.name" @input="edited()"></td>
+                        <td>
+                          <select @change="row.file = $event.target.value; edited()">
+                            <template x-for="f in fonts" :key="f">
+                              <option :value="f" :selected="f === row.file" x-text="f"></option>
+                            </template>
+                          </select>
+                        </td>
+                        <td><input type="number" x-model.number="row.size" min="1" @input="edited()"></td>
+                        <td><button class="btn" @click="removeFontRow(i); edited()">✕</button></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+                <div class="row" style="margin-top:.5rem">
+                  <button class="btn" @click="addFontRow()">+ Font</button>
+                  <label class="btn">Upload TTF/OTF
+                    <input type="file" accept=".ttf,.otf" @change="uploadFont($event)" style="display:none">
+                  </label>
+                </div>
+              </div>
+
+              <!-- LAYOUT -->
+              <template x-if="isMenu() && config.layout">
+                <div class="field">
+                  <label>Layout</label>
+                  <div class="lgrid">
+                    <label class="lf-l">columns<input type="number" min="1" x-model.number="config.layout.column_count" @input="edited()"></label>
+                    <label class="lf-l">column width<input type="number" x-model.number="config.layout.column_width" @input="edited()"></label>
+                    <label class="lf-l">line height<input type="number" x-model.number="config.layout.line_height" @input="edited()"></label>
+                    <label class="lf-l">top margin<input type="number" x-model.number="config.layout.margin_top" @input="edited()"></label>
+                  </div>
+                </div>
+              </template>
+
+              <!-- GROUPS -->
+              <template x-if="isMenu() && config.groups">
+                <div class="field">
+                  <label>Groups</label>
+                  <template x-for="(g, gi) in config.groups" :key="gi">
+                    <div class="section">
+                      <div class="section-head">
+                        <template x-if="hasHeader(g)">
+                          <input type="text" placeholder="Header" x-model="g.header" @input="edited()" style="flex:1;min-width:6rem">
+                        </template>
+                        <template x-if="!hasHeader(g)">
+                          <span class="lbl" style="flex:1">No header</span>
+                        </template>
+                        <button class="btn xs" @click="toggleHeader(g)" x-text="hasHeader(g) ? '− header' : '+ header'"></button>
+                        <label class="chk" style="font-size:.72rem"><input type="checkbox" :checked="g.hide_if_empty !== false" @change="g.hide_if_empty = $event.target.checked; edited()"> hide if empty</label>
+                        <button class="btn xs" @click="moveGroup(gi,-1)" :disabled="gi===0">↑</button>
+                        <button class="btn xs" @click="moveGroup(gi,1)" :disabled="gi===config.groups.length-1">↓</button>
+                        <button class="btn xs danger" @click="removeGroup(gi)">✕</button>
+                      </div>
+
+                      <div class="items">
+                        <template x-for="(it, ii) in (g.items || [])" :key="ii">
+                          <div class="item-row">
+                            <div class="irow">
+                              <template x-if="itemKind(it) !== 'advanced'">
+                                <input type="text" placeholder="text" x-model="it.text" @input="edited()" style="width:118px;flex:0 0 auto;min-width:0">
+                              </template>
+
+                              <template x-if="itemKind(it) === 'choice'">
+                                <span class="irow" style="gap:.35rem;flex:1">
+                                  <span class="rtag">Choice</span>
+                                  <input type="text" title="separator" placeholder="：" :value="it.separator ?? '：'" @input="it.separator=$event.target.value; edited()" style="width:2.4rem;flex:0 0 auto;text-align:center;min-width:0">
+                                  <input type="text" class="ent" placeholder="input_select.…" x-model="it.entity" @input="edited()" style="width:150px;flex:0 0 auto;min-width:0">
+                                  <button class="btn xs" @click="openPickerFor(id => { it.entity = id })">pick</button>
+                                  <select @change="setChoiceOptions(it, $event.target.value)">
+                                    <option value="__inline__" :selected="!choiceUsesSet(it)">inline options</option>
+                                    <template x-for="s in optionSetNames()" :key="s"><option :value="s" :selected="it.options===s" x-text="'set: '+s"></option></template>
+                                  </select>
+                                  <template x-if="!choiceUsesSet(it)">
+                                    <span class="ochips" style="flex-basis:100%;margin-top:.25rem">
+                                      <template x-for="(o,oi) in (Array.isArray(it.options)?it.options:[])" :key="oi"><span class="ochip"><span x-text="o"></span><button class="x" @click="removeInlineOption(it,oi)">✕</button></span></template>
+                                      <input type="text" class="oadd" placeholder="+ option" @change="addInlineOption(it,$event)">
+                                    </span>
+                                  </template>
+                                </span>
+                              </template>
+
+                              <template x-if="itemKind(it) === 'advanced'">
+                                <span class="adv"><span class="badge">advanced</span> <b style="font-weight:600" x-text="advancedSummary(it)"></b> — edit in Advanced tab</span>
+                              </template>
+
+                              <template x-if="itemKind(it) === 'line'">
+                                <span class="when">
+                                  <span class="wlbl" x-show="(it.when||[]).length">when</span>
+                                  <template x-for="(c, ci) in (it.when || [])" :key="ci">
+                                    <span>
+                                      <template x-if="condType(c)==='entity_on' || condType(c)==='entity_off'">
+                                        <span class="wc" :class="condType(c)==='entity_off' && 'off'"><span x-text="short(condEntity(c))"></span><span class="cst" x-text="condType(c)==='entity_off' ? 'OFF':'ON'"></span><button class="x" @click="removeCond(it, ci)">✕</button></span>
+                                      </template>
+                                      <template x-if="condType(c)==='select_equals'">
+                                        <span class="wc">
+                                          <span class="cst">any</span>
+                                          <template x-for="(e, ei) in seEnts(c)" :key="ei">
+                                            <span class="second"><span x-text="short(e)"></span><button class="x" @click="seRemoveEnt(c, ei)">✕</button></span>
+                                          </template>
+                                          <button class="secondadd" @click="seAddEnt(c)" title="add another select — matches if ANY equals the value">+ select</button>
+                                          <span class="cst">=</span>
+                                          <input type="text" placeholder="value" :value="c.select_equals.value" @input="c.select_equals.value=$event.target.value; edited()" style="width:96px;font-size:.75rem;padding:1px 5px;min-width:0">
+                                          <button class="x" @click="removeCond(it, ci)" title="remove condition">✕</button>
+                                        </span>
+                                      </template>
+                                    </span>
+                                  </template>
+                                  <span class="wc always" x-show="!(it.when||[]).length">always</span>
+                                  <button class="wc add" @click="addCond(it,'entity_on')">+ on</button>
+                                  <button class="wc add" @click="addCond(it,'entity_off')">+ off</button>
+                                  <button class="wc add" @click="addCond(it,'select_equals')">+ =</button>
+                                </span>
+                              </template>
+
+                              <button class="btn xs danger" @click="removeItem(g, ii)" style="margin-left:auto">✕</button>
+                            </div>
+                          </div>
+                        </template>
+                        <div class="row" style="padding-top:.4rem">
+                          <span class="lbl">Add:</span>
+                          <button class="btn xs" @click="addItem(g,'line')">Line</button>
+                          <button class="btn xs" @click="addItem(g,'choice')">Choice</button>
+                          <button class="btn xs" @click="addItem(g,'advanced')">Advanced</button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <button class="btn" @click="addGroup()" style="width:100%;justify-content:center;border-style:dashed;margin-top:.5rem">+ Add group</button>
+                </div>
+              </template>
+
+              <p class="hint">Advanced item conditions and the dashboard renderer are edited in the <b>Advanced</b> tab.</p>
+            </div>
+
+            <!-- YAML -->
+            <div x-show="tab === 'yaml'">
+              <div class="row" style="margin-bottom:.5rem">
+                <button class="btn" @click="openPicker()">Insert entity…</button>
+                <span class="hint">Inserts an entity id at the cursor.</span>
+              </div>
+              <textarea x-ref="yaml" x-model="yamlText" spellcheck="false" @input="edited()"></textarea>
+              <div class="yamlerr" x-show="yamlErr" x-text="yamlErr"></div>
+            </div>
+
+            <!-- FIRMWARE -->
+            <div x-show="tab === 'firmware'">
+              <div class="field" style="margin-bottom:.6rem">
+                <label>Keep-awake</label>
+                <template x-if="keepawake && !keepawake.exists">
+                  <div class="row" style="align-items:center;gap:.5rem">
+                    <button class="btn" @click="enableKeepawake()" :disabled="busy">Enable keep-awake toggle</button>
+                    <span class="hint">Creates an inkwell-owned switch to hold this screen awake for fast edits.</span>
+                  </div>
+                </template>
+                <template x-if="keepawake && keepawake.exists">
+                  <div class="row" style="align-items:center;gap:.6rem">
+                    <button class="btn" :class="keepawake.on && 'primary'" @click="toggleKeepawake()" :disabled="busy"
+                      x-text="'Keep-awake: ' + (keepawake.on ? 'ON' : 'OFF')"></button>
+                    <span class="hint">While ON the device polls ~15s and skips deep sleep — turn OFF when done editing.</span>
+                  </div>
+                </template>
+              </div>
+              <div class="row" style="margin-bottom:.5rem;align-items:center;gap:.5rem">
+                <button class="btn" @click="copyFirmware()" :disabled="!firmwareText" x-text="fwCopied ? 'Copied ✓' : 'Copy'"></button>
+                <span class="hint">ESPHome config for this display. Set <code>renderer_url</code> in the add-on
+                  Configuration tab, then paste this into a new ESPHome device.</span>
+              </div>
+              <div class="yamlerr" x-show="firmwareErr" x-text="firmwareErr"></div>
+              <textarea x-ref="fw" x-show="!firmwareErr" x-model="firmwareText" readonly spellcheck="false"></textarea>
+            </div>
+          </div>
+
+          <!-- PREVIEW + HELPERS -->
+          <div style="display:flex;flex-direction:column;gap:1rem">
+            <div class="panel preview">
+              <div class="muted" style="font-size:.8rem;margin-bottom:.5rem">
+                Preview<span x-show="previewErr" class="msg err" style="margin-left:.5rem" x-text="previewErr"></span>
+              </div>
+              <img x-show="previewSrc" :src="previewSrc" :alt="name + ' preview'">
+            </div>
+
+            <template x-if="isMenu() && config.groups">
+              <div class="panel">
+                <div class="muted" style="font-size:.8rem;margin-bottom:.4rem">Helpers · owned by Inkwell</div>
+                <template x-if="helpersChecked && helpers.length === 0">
+                  <div class="hstat ok" style="font-size:.82rem">No helpers referenced by this display.</div>
+                </template>
+                <template x-for="h in helpers" :key="h.entity_id">
+                  <div class="helper-row">
+                    <span class="hid" x-text="h.entity_id"></span>
+                    <span class="hstat" :class="helperStatusClass(h)" x-text="helperStatusLabel(h)"></span>
+                  </div>
+                </template>
+                <div class="row" style="flex-wrap:wrap;gap:.4rem;margin-top:.6rem">
+                  <button class="btn primary" x-show="missingHelpers().length" @click="createHelpers()" :disabled="busy"
+                    x-text="'Create ' + missingHelpers().length + ' missing'"></button>
+                  <button class="btn" x-show="driftedHelpers().length" @click="syncHelpers()" :disabled="busy"
+                    x-text="'Sync ' + driftedHelpers().length + ' option list' + (driftedHelpers().length===1?'':'s')"></button>
+                  <button class="btn" x-show="adoptableHelpers().length" @click="adoptHelpers()" :disabled="busy"
+                    x-text="'Adopt ' + adoptableHelpers().length"></button>
+                  <button class="btn" @click="cleanupHelpers()" :disabled="busy">Clean up unused</button>
+                </div>
+                <p class="hint" style="margin-top:.5rem">Inkwell only ever changes helpers it owns (◈), and never a helper's value. Cleanup deletes only owned helpers no longer referenced by any display.</p>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============ ENTITY PICKER ============ -->
+    <template x-if="pickerOpen">
+      <div class="overlay" @click.self="pickerOpen = false">
+        <div class="modal">
+          <div class="head">
+            <input type="text" placeholder="Search entities…" x-model="entityQuery" autofocus>
+            <button class="btn" @click="pickerOpen = false">Close</button>
+          </div>
+          <div class="list">
+            <template x-if="!entitiesLoaded"><div class="empty">Loading…</div></template>
+            <template x-for="e in filteredEntities()" :key="e.entity_id">
+              <div class="ent" @click="pickEntity(e.entity_id)">
+                <span class="id" x-text="e.entity_id"></span>
+                <span class="nm" x-text="e.name !== e.entity_id ? e.name : ''"></span>
+                <span class="st" x-text="e.state"></span>
+              </div>
+            </template>
+            <template x-if="entitiesLoaded && filteredEntities().length === 0">
+              <div class="empty">No matches.</div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
+
+  </div>
+</body>
+</html>

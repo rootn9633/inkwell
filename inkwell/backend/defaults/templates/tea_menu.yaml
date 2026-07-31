@@ -1,0 +1,107 @@
+hardware: waveshare_7in5_v2
+renderer: menu
+
+fonts:
+  title:  { file: "LXGWWenKaiScreen.ttf", size: 72 }
+  header: { file: "LXGWWenKaiScreen.ttf", size: 45 }
+  body:   { file: "LXGWWenKaiScreen.ttf", size: 27 }
+
+layout:
+  title_x: 30
+  content_x_start: 120
+  column_width: 240
+  column_count: 3
+  margin_top: 25
+  margin_bottom: 20
+  line_height: 45
+  header_gap: 15
+  header_height: 45
+  header_padding: 5
+  special_gap: 5
+
+title:
+  text: "茶找表"
+  font: title
+  start_y: 60
+  char_spacing: 100
+  separator_x: 110
+
+# Shared choice lists — edit once, applies to every item that references it.
+option_sets:
+  bottles:
+    - none
+    - "Earl Grey"
+    - "Assam"
+    - "抹茶玄米"
+    - "麥茶"
+    - "焙茶"
+    - "玉米鬚茶"
+    - "蜜香烏龍茶"
+
+groups:
+  # Bottle list (no header) — each is a Choice on a shared option set.
+  - items:
+      - text: "紅瓶："
+        control: choice
+        entity: "input_select.tea_red_bottle"
+        managed: true
+        options: bottles
+        separator: ""
+      - text: "綠瓶："
+        control: choice
+        entity: "input_select.tea_green_bottle"
+        managed: true
+        options: bottles
+        separator: ""
+      - text: "白瓶："
+        control: choice
+        entity: "input_select.tea_white_bottle"
+        managed: true
+        options: bottles
+        separator: ""
+
+  - header: "拿鐵"
+    hide_if_empty: true
+    items:
+      - text: "焙茶拿鐵"
+        when:
+          - entity_on: "input_boolean.tea_milk"
+          - entity_on: "input_boolean.tea_hojicha"
+      - text: "冬瓜牛奶"
+        when:
+          - entity_on: "input_boolean.tea_milk"
+          - entity_on: "input_boolean.tea_wintermelon"
+      - text: "伯爵紅茶拿鐵"
+        when:
+          - entity_on: "input_boolean.tea_milk"
+          - select_equals:
+              any_of:
+                - "input_select.tea_red_bottle"
+                - "input_select.tea_green_bottle"
+                - "input_select.tea_white_bottle"
+              value: "Earl Grey"
+
+  - header: "果香"
+    hide_if_empty: true
+    items:
+      - text: "蜂蜜柚子茶"
+        when:
+          - entity_on: "input_boolean.tea_honey_yuzu"
+          - entity_off: "input_boolean.tea_sparkling"
+      - text: "蜂蜜柚子氣泡"
+        when:
+          - entity_on: "input_boolean.tea_honey_yuzu"
+          - entity_on: "input_boolean.tea_sparkling"
+      - text: "冬瓜茶"
+        when:
+          - entity_on: "input_boolean.tea_wintermelon"
+
+  - header: "現泡"
+    items:
+      - { text: "伯爵紅茶" }
+      - { text: "蜜香紅茶" }
+      - { text: "阿里山綠茶" }
+      - { text: "蜜香烏龍茶" }
+      - { text: "抹茶玄米茶" }
+      - { text: "玉米鬚茶" }
+      - { text: "焙茶" }

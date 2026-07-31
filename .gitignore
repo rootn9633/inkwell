@@ -1,3 +1,7 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Runtime artefacts — rendered PNGs are not source
 eink-renderer/output/
 
@@ -10,6 +14,16 @@ eink-renderer/fonts/
 # ESPHome secrets and build artifacts
 esphome/secrets.yaml
 esphome/.esphome/
+
+# Vendored assets — fetched at Docker build time, not committed
+inkwell/frontend/static/*.min.js
+inkwell/backend/defaults/fonts/
+
+# Local-only dev helper (machine-specific HA host)
+scripts/sync-to-ha.sh
+
+# MCP server config — may contain connection secrets
+.mcp.json
 
 CLAUDE.md
 project-context.md
