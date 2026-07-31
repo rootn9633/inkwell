@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.4
+
+- The **Helpers** panel now lists the display's keep-awake toggle alongside the rest, and **Adopt**
+  covers it — previously it was hidden because it's derived from the display name rather than
+  referenced in the config, so a panel titled "owned by Inkwell" silently omitted one of the
+  helpers Inkwell owns. The Firmware tab keeps the ON/OFF control and sheds the ownership concern.
+
 ## 0.12.3
 
 - Fix: **Enable keep-awake** now adopts a pre-existing toggle instead of leaving it unmanaged.

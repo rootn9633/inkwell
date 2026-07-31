@@ -177,20 +177,15 @@ document.addEventListener('alpine:init', () => {
       } catch (e) { /* leave null; section just hides */ }
     },
     async enableKeepawake() {
-      // Same endpoint creates a missing toggle or adopts an existing unowned one.
-      const existed = !!(this.keepawake && this.keepawake.exists);
       this.busy = true; this.msg = null;
       try {
         const r = await fetch(this.base + '/api/displays/' + encodeURIComponent(this.name) + '/keepawake/enable', { method: 'POST' });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
         this.keepawake = d;
-        this.msg = !existed
-          ? { ok: true, text: 'Keep-awake toggle created.' }
-          : d.owned
-            ? { ok: true, text: 'Keep-awake toggle adopted.' }
-            : { ok: false, text: "Can't adopt — that helper isn't storage-backed (YAML-defined)." };
-      } catch (e) { this.msg = { ok: false, text: (existed ? 'Adopt' : 'Enable') + ' failed: ' + e.message }; }
+        this.msg = { ok: true, text: 'Keep-awake toggle created.' };
+        this.loadHelpers();   // it now appears in the Helpers panel
+      } catch (e) { this.msg = { ok: false, text: 'Enable failed: ' + e.message }; }
       finally { this.busy = false; }
     },
     async toggleKeepawake() {
