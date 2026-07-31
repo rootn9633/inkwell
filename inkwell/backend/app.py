@@ -245,7 +245,11 @@ def keepawake_watched() -> set:
 
 
 async def api_helpers_status(request: web.Request) -> web.Response:
-    """Per-helper status for a display: exists / owned / storage / drifted (selects)."""
+    """Per-helper status for a display: exists / owned / storage / drifted (selects).
+
+    Covers the display's derived keep-awake toggle too (once it exists), so the panel
+    answers "what does inkwell manage for this display?" without the config-referenced
+    vs derived split leaking into the UI."""
     name = request.match_info["name"]
     try:
         config = render.load_display_config(name)
@@ -257,6 +261,12 @@ async def api_helpers_status(request: web.Request) -> web.Response:
     except Exception as e:
         return web.json_response({"error": str(e), "helpers": []}, status=502)
     led = ledger.load()
+    # Only list the keep-awake toggle once it's real — it's created from the Firmware
+    # tab, not by "create missing", so showing it as "not created" would offer a button
+    # that doesn't apply to it.
+    ka = keepawake_entity(name)
+    if ka in by_id or ka in led:
+        targets.setdefault(ka, {"entity_id": ka, "domain": "input_boolean", "derived": True})
     storage = {}
     for domain in {t["domain"] for t in targets.values()}:
         try:
@@ -268,6 +278,8 @@ async def api_helpers_status(request: web.Request) -> web.Response:
         exists = eid in by_id
         s = {"entity_id": eid, "domain": t["domain"], "exists": exists,
              "owned": eid in led, "storage": eid in storage}
+        if t.get("derived"):
+            s["derived"] = True
         if t["domain"] == "input_select":
             desired = t.get("options") or []
             s["desired_options"] = desired
@@ -356,11 +368,15 @@ async def api_adopt_helpers(request: web.Request) -> web.Response:
     targets = _config_helper_targets(config)
     led = ledger.load()
     storage = {}
-    for domain in {t["domain"] for t in targets.values()}:
+    # input_boolean is always fetched so the derived keep-awake toggle can be adopted too.
+    for domain in {t["domain"] for t in targets.values()} | {"input_boolean"}:
         try:
             storage |= await ha_ws.list_storage_helpers(domain)
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
+    ka = keepawake_entity(name)
+    if ka in storage:
+        targets.setdefault(ka, {"entity_id": ka, "domain": "input_boolean"})
     adopted, skipped = [], []
     for eid, t in sorted(targets.items()):
         if eid in led:

@@ -421,10 +421,7 @@
                   <div class="row" style="align-items:center;gap:.6rem;flex-wrap:wrap">
                     <button class="btn" :class="keepawake.on && 'primary'" @click="toggleKeepawake()" :disabled="busy"
                       x-text="'Keep-awake: ' + (keepawake.on ? 'ON' : 'OFF')"></button>
-                    <button class="btn" x-show="!keepawake.owned" @click="enableKeepawake()" :disabled="busy">Adopt</button>
-                    <span class="hint" x-show="!keepawake.owned">
-                      Exists but isn't managed by Inkwell (◈) — adopt it so cleanup can retire it with this display.</span>
-                    <span class="hint" x-show="keepawake.owned">
+                    <span class="hint">
                       While ON the device stays awake and refreshes every 30s — turn OFF when done editing.</span>
                   </div>
                 </template>
