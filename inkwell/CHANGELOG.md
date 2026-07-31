@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.3
+
+- Fix: **Enable keep-awake** now adopts a pre-existing toggle instead of leaving it unmanaged.
+  The toggle is derived rather than config-referenced, so *Adopt* never covered it — after a
+  reinstall (e.g. moving from a local add-on to a repository install) it stayed unowned forever
+  and would linger in HA if its display was deleted.
+
 ## 0.12.2
 
 - Bake a default CJK font (LXGW WenKai Screen, OFL) into the image at build time, so a fresh
