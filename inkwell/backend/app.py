@@ -456,18 +456,31 @@ async def api_keepawake(request: web.Request) -> web.Response:
 
 
 async def api_keepawake_enable(request: web.Request) -> web.Response:
-    """Create the display's inkwell-owned keep-awake toggle (idempotent)."""
+    """Create the display's inkwell-owned keep-awake toggle (idempotent).
+
+    If the toggle already exists but isn't in the ledger — a leftover from a previous
+    install, since it's derived rather than config-referenced so Adopt never sees it —
+    adopt it when it's storage-backed, so cleanup can retire it with its display."""
     name = request.match_info["name"]
     if not render.display_path(name).exists():
         return web.json_response({"error": "Not found"}, status=404)
     st = await _keepawake_state(name)
+    eid = st["entity_id"]
     if not st["exists"]:
         try:
-            await ha_ws.create_helper(st["entity_id"])   # input_boolean
-            ledger.add(st["entity_id"], "input_boolean")
+            await ha_ws.create_helper(eid)   # input_boolean
+            ledger.add(eid, "input_boolean")
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
         await _reindex_and_prime()   # start watching it
+    elif not st["owned"]:
+        try:
+            storage = await ha_ws.list_storage_helpers("input_boolean")
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=502)
+        if eid in storage:
+            ledger.add(eid, "input_boolean", adopted=True)
+            log.info("Adopted pre-existing keep-awake toggle: %s", eid)
     return web.json_response(await _keepawake_state(name))
 
 
